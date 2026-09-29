@@ -25,6 +25,10 @@ const editorTheme = EditorView.theme({
   },
   ".cm-scroller": { overflow: "auto", lineHeight: "1.9", fontFamily: "inherit" },
   ".cm-content": { padding: "15px 14px 15px 0", caretColor: "#ffffff" },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "#ffffff",
+    borderLeftWidth: "2px",
+  },
   ".cm-line": { padding: "0" },
   ".cm-gutters": {
     backgroundColor: "transparent",
