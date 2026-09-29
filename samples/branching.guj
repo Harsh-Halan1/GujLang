@@ -1,0 +1,7 @@
+rakh x = 5
+jo x > 3 to kar
+  bolo "moto che"
+bas
+nahi to kar
+  bolo "nano che"
+bas

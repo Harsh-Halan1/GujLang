@@ -1,0 +1,5 @@
+rakh i = 0
+jyare i < 3 kar
+  bolo i
+  i = i + 1
+bas

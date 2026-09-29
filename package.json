@@ -1,0 +1,34 @@
+{
+  "name": "gujlang-compiler",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GujLang compiler core and stack virtual machine",
+  "scripts": {
+    "build": "bun run build:core && bun run build:web",
+    "build:core": "tsc -p tsconfig.json",
+    "build:web": "vite build",
+    "dev": "vite --host 127.0.0.1",
+    "cli": "bun --watch src/cli.ts",
+    "start": "bun dist/src/cli.js",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "bun run build && bun run test:smoke",
+    "test:smoke": "bun dist/test/smoke.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@biomejs/biome": "^2.5.14",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "packageManager": "bun@1.4.2"
+}
