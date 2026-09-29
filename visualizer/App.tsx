@@ -1,19 +1,15 @@
-import { useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useMemo, useRef, useState } from "react";
 import type { Stmt, TypeName } from "../src/ast";
 import { type CompileResult, compile } from "../src/compiler";
 import type { Token } from "../src/lexer";
+import type { GujLangEditorHandle } from "./GujLangEditor";
 
-type Tab =
-  | "overview"
-  | "tokens"
-  | "syntax"
-  | "symbols"
-  | "ir"
-  | "assembly"
-  | "run"
-  | "errors"
-  | "language"
-  | "compiler";
+const GujLangEditor = lazy(() =>
+  import("./GujLangEditor").then((module) => ({ default: module.GujLangEditor })),
+);
+
+type Tab = "overview" | "tokens" | "syntax" | "symbols" | "ir" | "assembly" | "run" | "errors";
+type Guide = "language" | "compiler";
 type Demo = { title: string; source: string; description: string };
 const demos: Demo[] = [
   {
@@ -126,12 +122,19 @@ function TokenTable({ tokens, onSelect }: { tokens: Token[]; onSelect: (token: T
           {tokens
             .filter((token) => token.type !== "EOF")
             .map((token, index) => (
-              <tr key={`${token.span.start}-${index}`} onClick={() => onSelect(token)}>
+              <tr key={`${token.span.start}-${index}`}>
                 <td>
                   <span className={`tag ${token.kind}`}>{token.type}</span>
                 </td>
                 <td>
-                  <code>{token.lexeme}</code>
+                  <button
+                    type="button"
+                    className="token-select"
+                    onClick={() => onSelect(token)}
+                    aria-label={`Select source token ${token.lexeme}`}
+                  >
+                    <code>{token.lexeme}</code>
+                  </button>
                 </td>
                 <td>
                   {token.span.line}:{token.span.column}–{token.span.endLine}:{token.span.endColumn}
@@ -192,9 +195,12 @@ export default function App() {
   const [deadCodeElimination, setDeadCodeElimination] = useState(true);
   const [demoIndex, setDemoIndex] = useState(0);
   const [showKeywords, setShowKeywords] = useState(false);
+  const [showDocumentation, setShowDocumentation] = useState(false);
+  const [activeGuide, setActiveGuide] = useState<Guide>("language");
   const [traceIndex, setTraceIndex] = useState(0);
   const [runRequested, setRunRequested] = useState(false);
-  const editor = useRef<HTMLTextAreaElement>(null);
+  const editor = useRef<GujLangEditorHandle>(null);
+  const sourceEpoch = useRef(0);
   const result = useMemo(
     () =>
       compile(source, {
@@ -210,12 +216,16 @@ export default function App() {
   const trace = result.runtime?.trace ?? [];
   const frame = trace[Math.min(traceIndex, Math.max(0, trace.length - 1))];
   const selectToken = (token: Token) => {
-    editor.current?.focus();
-    editor.current?.setSelectionRange(token.span.start, token.span.end);
+    editor.current?.selectRange(token.span.start, token.span.end);
+  };
+  const inspectPhase = (tab: Tab) => {
+    setActiveTab(tab);
+    setShowDocumentation(false);
   };
   const loadDemo = (direction: number) => {
     const next = (demoIndex + direction + demos.length) % demos.length;
     setDemoIndex(next);
+    sourceEpoch.current++;
     setSource(demos[next].source);
     setTraceIndex(0);
     setRunRequested(false);
@@ -233,8 +243,6 @@ export default function App() {
     { id: "assembly", label: "Registers" },
     { id: "run", label: "Run" },
     { id: "errors", label: "Errors", count: diagnosticCount },
-    { id: "language", label: "Language guide" },
-    { id: "compiler", label: "Compiler guide" },
   ];
 
   return (
@@ -252,6 +260,13 @@ export default function App() {
           </span>
           <button type="button" className="quiet" onClick={() => setShowKeywords(true)}>
             Keyword guide
+          </button>
+          <button
+            type="button"
+            className="quiet documentation-trigger"
+            onClick={() => setShowDocumentation(true)}
+          >
+            Documentation
           </button>
           <button
             type="button"
@@ -304,22 +319,18 @@ export default function App() {
             <span className="language-pill">GUJLANG · V1</span>
           </div>
           <div className="editor-wrap">
-            <div className="line-numbers">
-              {source.split("\n").map((_, index) => (
-                <span key={index}>{String(index + 1).padStart(2, "0")}</span>
-              ))}
-            </div>
-            <textarea
-              ref={editor}
-              spellCheck={false}
-              value={source}
-              onChange={(event) => {
-                setSource(event.target.value);
-                setTraceIndex(0);
-                setRunRequested(false);
-              }}
-              aria-label="GujLang source editor"
-            />
+            <Suspense fallback={<div className="editor-loading">Loading code editor…</div>}>
+              <GujLangEditor
+                editorRef={editor}
+                value={source}
+                sourceEpoch={sourceEpoch.current}
+                onChange={(nextSource) => {
+                  setSource(nextSource);
+                  setTraceIndex(0);
+                  setRunRequested(false);
+                }}
+              />
+            </Suspense>
           </div>
           <div className="editor-footer">
             <span>
@@ -330,6 +341,7 @@ export default function App() {
                 type="button"
                 className="quiet small"
                 onClick={() => {
+                  sourceEpoch.current++;
                   setSource("");
                   setRunRequested(false);
                 }}
@@ -340,6 +352,7 @@ export default function App() {
                 type="button"
                 className="quiet small"
                 onClick={() => {
+                  sourceEpoch.current++;
                   setSource(initialSource);
                   setDemoIndex(0);
                   setRunRequested(false);
@@ -735,188 +748,6 @@ export default function App() {
                 )}
               </section>
             )}
-            {activeTab === "language" && (
-              <section className="phase-view documentation-view">
-                <div className="view-title">
-                  <div>
-                    <span className="eyebrow">REFERENCE · V1</span>
-                    <h2>GujLang language guide</h2>
-                  </div>
-                </div>
-                <p className="helper">
-                  A compact guide to the syntax and rules implemented by this compiler.
-                </p>
-                <div className="documentation-grid">
-                  <article className="documentation-card">
-                    <span className="demo-label">A PROGRAM</span>
-                    <pre>{`rakh total = 0
-rakh i = 1
-jyare i <= 5 kar
-  total = total + i
-  i = i + 1
-bas
-bolo total`}</pre>
-                    <p>Declarations, assignments, loops, and output run from top to bottom.</p>
-                  </article>
-                  <article className="documentation-card">
-                    <span className="demo-label">KEYWORDS</span>
-                    <div className="guide-pairs">
-                      {keywordRows.slice(0, 7).map(([english, gujlang]) => (
-                        <div key={english}>
-                          <code>{gujlang}</code>
-                          <span>{english}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <p>
-                      English aliases are also accepted; both spellings compile to the same token.
-                    </p>
-                  </article>
-                  <article className="documentation-card">
-                    <span className="demo-label">BLOCKS AND CONDITIONS</span>
-                    <pre>{`jo ready ane count > 0 to kar
-  bolo "ready"
-bas
-nahi to kar
-  bolo "not ready"
-bas`}</pre>
-                    <p>
-                      Every <code>kar</code> opens one block and must have its own <code>bas</code>.
-                    </p>
-                  </article>
-                  <article className="documentation-card">
-                    <span className="demo-label">TYPES AND SCOPE</span>
-                    <ul>
-                      <li>
-                        Types are inferred at declaration: <code>int</code>, <code>float</code>, or{" "}
-                        <code>bool</code>.
-                      </li>
-                      <li>Variable types stay fixed after declaration.</li>
-                      <li>Integer and float arithmetic can mix; division produces a float.</li>
-                      <li>Variables use one flat global scope, including inside blocks.</li>
-                      <li>
-                        Strings are accepted only as direct <code>bolo</code> arguments.
-                      </li>
-                    </ul>
-                  </article>
-                  <article className="documentation-card">
-                    <span className="demo-label">OPERATOR PRECEDENCE · LOW TO HIGH</span>
-                    <ol>
-                      <li>
-                        <code>athva</code> (or)
-                      </li>
-                      <li>
-                        <code>ane</code> (and)
-                      </li>
-                      <li>
-                        <code>nathi</code> (not)
-                      </li>
-                      <li>
-                        Comparisons: <code>&gt; &lt; &gt;= &lt;= == !=</code>
-                      </li>
-                      <li>
-                        <code>+ -</code>, then <code>* /</code>, then unary <code>-</code>
-                      </li>
-                    </ol>
-                    <p>
-                      Comparisons cannot be chained; combine them with <code>ane</code>.
-                    </p>
-                  </article>
-                  <article className="documentation-card">
-                    <span className="demo-label">V1 BOUNDARY</span>
-                    <p>
-                      Functions (<code>kaam</code>), return (<code>pachu aap</code>), break (
-                      <code>rokay</code>), and continue (<code>aagad</code>) are reserved words, not
-                      implemented features.
-                    </p>
-                    <button
-                      type="button"
-                      className="quiet small"
-                      onClick={() => setShowKeywords(true)}
-                    >
-                      Open full keyword table
-                    </button>
-                  </article>
-                </div>
-              </section>
-            )}
-            {activeTab === "compiler" && (
-              <section className="phase-view documentation-view">
-                <div className="view-title">
-                  <div>
-                    <span className="eyebrow">TEACHING NOTES · V1</span>
-                    <h2>Compiler and runtime guide</h2>
-                  </div>
-                </div>
-                <p className="helper">
-                  Follow how source becomes executable instructions and where each course concept
-                  appears.
-                </p>
-                <div className="pipeline-guide">
-                  {[
-                    [
-                      "01",
-                      "Lexical analysis",
-                      "Groups source characters into typed tokens with line and column spans.",
-                    ],
-                    [
-                      "02",
-                      "Parsing",
-                      "Checks the grammar and builds an abstract syntax tree; syntax errors recover at statement boundaries.",
-                    ],
-                    [
-                      "03",
-                      "Semantic analysis",
-                      "Resolves declared variables and checks expression types before code generation.",
-                    ],
-                    [
-                      "04",
-                      "Three-address code",
-                      "Lowers expressions and control flow into temporary values, labels, and jumps.",
-                    ],
-                    [
-                      "05",
-                      "Optimization",
-                      "Toggle constant folding and dead-code elimination independently, then inspect the changed TAC.",
-                    ],
-                    [
-                      "06",
-                      "Backends and execution",
-                      "The stack VM executes programs. Graph coloring assigns pseudo-registers for an inspectable second backend artifact.",
-                    ],
-                  ].map(([number, title, description]) => (
-                    <article key={number}>
-                      <span>{number}</span>
-                      <div>
-                        <strong>{title}</strong>
-                        <p>{description}</p>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-                <div className="documentation-note">
-                  <strong>Runtime safeguards</strong>
-                  <p>
-                    Division by zero halts with a diagnostic. An instruction cap stops programs that
-                    may loop forever. Static type errors block code generation.
-                  </p>
-                </div>
-                <div className="guide-links">
-                  <button type="button" onClick={() => setActiveTab("tokens")}>
-                    Inspect tokens →
-                  </button>
-                  <button type="button" onClick={() => setActiveTab("syntax")}>
-                    Inspect the AST →
-                  </button>
-                  <button type="button" onClick={() => setActiveTab("ir")}>
-                    Inspect TAC and optimizations →
-                  </button>
-                  <button type="button" onClick={() => setActiveTab("assembly")}>
-                    Inspect register allocation →
-                  </button>
-                </div>
-              </section>
-            )}
           </div>
         </div>
       </section>
@@ -926,6 +757,295 @@ bas`}</pre>
         </span>
         <span>Built for learning compiler design</span>
       </footer>
+      {showDocumentation && (
+        <div className="modal-backdrop documentation-backdrop" role="presentation">
+          <section
+            className="documentation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="GujLang documentation"
+          >
+            <header className="documentation-header">
+              <div>
+                <span className="eyebrow">GUJLANG · V1 REFERENCE</span>
+                <h2>Documentation</h2>
+              </div>
+              <button
+                type="button"
+                className="modal-close documentation-close"
+                onClick={() => setShowDocumentation(false)}
+                aria-label="Close documentation"
+              >
+                ×
+              </button>
+            </header>
+            <nav className="documentation-nav" aria-label="Documentation sections">
+              <button
+                type="button"
+                className={activeGuide === "language" ? "active" : ""}
+                onClick={() => setActiveGuide("language")}
+              >
+                Language guide
+              </button>
+              <button
+                type="button"
+                className={activeGuide === "compiler" ? "active" : ""}
+                onClick={() => setActiveGuide("compiler")}
+              >
+                Compiler guide
+              </button>
+            </nav>
+            <div className="documentation-scroll">
+              {activeGuide === "language" && (
+                <section className="phase-view documentation-view">
+                  <div className="view-title">
+                    <div>
+                      <span className="eyebrow">REFERENCE · V1</span>
+                      <h2>GujLang language guide</h2>
+                    </div>
+                  </div>
+                  <p className="helper">
+                    A compact guide to the syntax and rules implemented by this compiler.
+                  </p>
+                  <div className="documentation-grid">
+                    <article className="documentation-card">
+                      <span className="demo-label">A PROGRAM</span>
+                      <pre>{`rakh total = 0
+rakh i = 1
+jyare i <= 5 kar
+  total = total + i
+  i = i + 1
+bas
+bolo total`}</pre>
+                      <p>Declarations, assignments, loops, and output run from top to bottom.</p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">KEYWORDS</span>
+                      <div className="guide-pairs">
+                        {keywordRows.slice(0, 7).map(([english, gujlang]) => (
+                          <div key={english}>
+                            <code>{gujlang}</code>
+                            <span>{english}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <p>
+                        English aliases are also accepted; both spellings compile to the same token.
+                      </p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">BLOCKS AND CONDITIONS</span>
+                      <pre>{`jo ready ane count > 0 to kar
+  bolo "ready"
+bas
+nahi to kar
+  bolo "not ready"
+bas`}</pre>
+                      <p>
+                        Every <code>kar</code> opens one block and must have its own{" "}
+                        <code>bas</code>.
+                      </p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">TYPES AND SCOPE</span>
+                      <ul>
+                        <li>
+                          Types are inferred at declaration: <code>int</code>, <code>float</code>,
+                          or <code>bool</code>.
+                        </li>
+                        <li>Variable types stay fixed after declaration.</li>
+                        <li>Integer and float arithmetic can mix; division produces a float.</li>
+                        <li>Variables use one flat global scope, including inside blocks.</li>
+                        <li>
+                          Strings are accepted only as direct <code>bolo</code> arguments.
+                        </li>
+                      </ul>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">EXPRESSIONS AND COMMENTS</span>
+                      <pre>{`# full-line comment
+rakh price = 12.5 // inline comment
+rakh discounted = price * 0.9
+rakh valid = discounted <= 20
+bolo valid`}</pre>
+                      <p>
+                        Expressions use parentheses and unary signs alongside arithmetic,
+                        comparisons, and boolean operators. Comments start with <code>#</code> or
+                        <code>{"//"}</code> and continue to the end of the line.
+                      </p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">OPERATOR PRECEDENCE · LOW TO HIGH</span>
+                      <ol>
+                        <li>
+                          <code>athva</code> (or)
+                        </li>
+                        <li>
+                          <code>ane</code> (and)
+                        </li>
+                        <li>
+                          <code>nathi</code> (not)
+                        </li>
+                        <li>
+                          Comparisons: <code>&gt; &lt; &gt;= &lt;= == !=</code>
+                        </li>
+                        <li>
+                          <code>+ -</code>, then <code>* /</code>, then unary <code>-</code>
+                        </li>
+                      </ol>
+                      <p>
+                        Comparisons cannot be chained; combine them with <code>ane</code>.
+                      </p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">V1 BOUNDARY</span>
+                      <p>
+                        Functions (<code>kaam</code>), return (<code>pachu aap</code>), break (
+                        <code>rokay</code>), and continue (<code>aagad</code>) are reserved words,
+                        not implemented features.
+                      </p>
+                      <button
+                        type="button"
+                        className="quiet small"
+                        onClick={() => {
+                          setShowDocumentation(false);
+                          setShowKeywords(true);
+                        }}
+                      >
+                        Open full keyword table
+                      </button>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">ERRORS AND RECOVERY</span>
+                      <ul>
+                        <li>
+                          Lexer errors identify the source location and skip the invalid character.
+                        </li>
+                        <li>
+                          Parser errors recover at statement boundaries so later issues can still be
+                          shown.
+                        </li>
+                        <li>Type and undeclared-name errors prevent code generation.</li>
+                        <li>
+                          Use the Errors phase tab to inspect diagnostics and recovery points.
+                        </li>
+                      </ul>
+                    </article>
+                  </div>
+                </section>
+              )}
+              {activeGuide === "compiler" && (
+                <section className="phase-view documentation-view">
+                  <div className="view-title">
+                    <div>
+                      <span className="eyebrow">TEACHING NOTES · V1</span>
+                      <h2>Compiler and runtime guide</h2>
+                    </div>
+                  </div>
+                  <p className="helper">
+                    Follow how source becomes executable instructions and where each course concept
+                    appears.
+                  </p>
+                  <div className="pipeline-guide">
+                    {[
+                      [
+                        "01",
+                        "Lexical analysis",
+                        "Groups source characters into typed tokens with line and column spans.",
+                      ],
+                      [
+                        "02",
+                        "Parsing",
+                        "Checks the grammar and builds an abstract syntax tree; syntax errors recover at statement boundaries.",
+                      ],
+                      [
+                        "03",
+                        "Semantic analysis",
+                        "Resolves declared variables and checks expression types before code generation.",
+                      ],
+                      [
+                        "04",
+                        "Three-address code",
+                        "Lowers expressions and control flow into temporary values, labels, and jumps.",
+                      ],
+                      [
+                        "05",
+                        "Optimization",
+                        "Toggle constant folding and dead-code elimination independently, then inspect the changed TAC.",
+                      ],
+                      [
+                        "06",
+                        "Backends and execution",
+                        "The stack VM executes programs. Graph coloring assigns pseudo-registers for an inspectable second backend artifact.",
+                      ],
+                    ].map(([number, title, description]) => (
+                      <article key={number}>
+                        <span>{number}</span>
+                        <div>
+                          <strong>{title}</strong>
+                          <p>{description}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="documentation-grid compiler-concepts">
+                    <article className="documentation-card">
+                      <span className="demo-label">WHAT TO LOOK FOR</span>
+                      <ul>
+                        <li>
+                          <strong>Tokens:</strong> category, lexeme, and exact source range.
+                        </li>
+                        <li>
+                          <strong>AST:</strong> tree structure with the grammar production for each
+                          node.
+                        </li>
+                        <li>
+                          <strong>Symbols:</strong> declaration order, inferred types, and flat
+                          scope.
+                        </li>
+                        <li>
+                          <strong>TAC:</strong> temporaries and labels that make control flow
+                          explicit.
+                        </li>
+                      </ul>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">COMPARING BACKENDS</span>
+                      <p>
+                        The stack VM is the executable backend. Register allocation is a teaching
+                        artifact generated from TAC: inspect its interference graph, register map,
+                        and spills to discuss graph coloring. It is not a native machine-code
+                        backend.
+                      </p>
+                    </article>
+                  </div>
+                  <div className="documentation-note">
+                    <strong>Runtime safeguards</strong>
+                    <p>
+                      Division by zero halts with a diagnostic. An instruction cap stops programs
+                      that may loop forever. Static type errors block code generation.
+                    </p>
+                  </div>
+                  <div className="guide-links">
+                    <button type="button" onClick={() => inspectPhase("tokens")}>
+                      Inspect tokens →
+                    </button>
+                    <button type="button" onClick={() => inspectPhase("syntax")}>
+                      Inspect the AST →
+                    </button>
+                    <button type="button" onClick={() => inspectPhase("ir")}>
+                      Inspect TAC and optimizations →
+                    </button>
+                    <button type="button" onClick={() => inspectPhase("assembly")}>
+                      Inspect register allocation →
+                    </button>
+                  </div>
+                </section>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
       {showKeywords && (
         <div className="modal-backdrop" role="presentation">
           <section
