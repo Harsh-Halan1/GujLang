@@ -36,7 +36,6 @@ export function compile(
   const lexed = lex(source),
     parsed = parse(lexed.tokens),
     diagnostics = [...lexed.diagnostics, ...parsed.diagnostics];
-  if (diagnostics.length) return { tokens: lexed.tokens, diagnostics, symbols: [] };
   const checked = analyze(parsed.module);
   diagnostics.push(...checked.diagnostics);
   if (diagnostics.length)

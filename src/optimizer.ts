@@ -56,6 +56,7 @@ export function optimize(
     code = folded;
   }
   if (enabled.deadCodeElimination) {
+    code = removeUnreachable(code, annotations);
     let removed = true;
     while (removed) {
       const labels = new Map(
@@ -114,6 +115,64 @@ export function optimize(
     }
   }
   return { code, annotations };
+}
+
+function removeUnreachable(code: TacInstruction[], annotations: string[]): TacInstruction[] {
+  if (code.length === 0) return code;
+  const labels = new Map(
+    code.flatMap((instruction, index) =>
+      instruction.op === "label" ? [[instruction.name, index] as const] : [],
+    ),
+  );
+  const functions = new Map(
+    code.flatMap((instruction, index) =>
+      instruction.op === "function" ? [[instruction.name, index + 1] as const] : [],
+    ),
+  );
+  const functionAt: (string | undefined)[] = [];
+  const returnSites = new Map<string, number[]>();
+  let activeFunction: string | undefined;
+  code.forEach((instruction, index) => {
+    if (instruction.op === "function") activeFunction = instruction.name;
+    functionAt[index] = activeFunction;
+    if (instruction.op === "call" && index + 1 < code.length) {
+      const sites = returnSites.get(instruction.name) ?? [];
+      sites.push(index + 1);
+      returnSites.set(instruction.name, sites);
+    }
+  });
+  const successors = (index: number): number[] => {
+    const instruction = code[index];
+    if (instruction.op === "goto")
+      return [labels.get(instruction.target)].filter((n): n is number => n !== undefined);
+    if (instruction.op === "ifFalse")
+      return [index + 1, labels.get(instruction.target)].filter(
+        (n): n is number => n !== undefined && n < code.length,
+      );
+    if (instruction.op === "call")
+      return [index + 1, functions.get(instruction.name)].filter(
+        (n): n is number => n !== undefined && n < code.length,
+      );
+    if (instruction.op === "return") return returnSites.get(functionAt[index] ?? "") ?? [];
+    if (instruction.op === "halt" || instruction.op === "function") return [];
+    return index + 1 < code.length ? [index + 1] : [];
+  };
+  const reachable = new Set<number>([0]);
+  const pending = [0];
+  while (pending.length) {
+    const index = pending.pop();
+    if (index === undefined) continue;
+    for (const next of successors(index)) {
+      if (!reachable.has(next)) {
+        reachable.add(next);
+        pending.push(next);
+      }
+    }
+  }
+  const filtered = code.filter((_, index) => reachable.has(index));
+  if (filtered.length !== code.length)
+    annotations.push(`Removed ${code.length - filtered.length} unreachable TAC instruction(s)`);
+  return filtered;
 }
 
 function evaluate(

@@ -8,7 +8,8 @@
     "build:core": "tsc -p tsconfig.json",
     "build:web": "vite build",
     "dev": "vite --host 127.0.0.1",
-    "cli": "bun --watch src/cli.ts",
+    "cli": "bun src/cli.ts",
+    "cli:watch": "bun --watch src/cli.ts",
     "start": "bun dist/src/cli.js",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -27,9 +28,12 @@
     "vite": "^6.3.5"
   },
   "dependencies": {
+    "@codemirror/autocomplete": "^6.20.3",
     "@codemirror/commands": "^6.11.1",
     "@codemirror/language": "^6.12.4",
+    "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.13",
+    "@lezer/highlight": "^1.2.5",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },

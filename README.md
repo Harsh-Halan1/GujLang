@@ -14,8 +14,8 @@ nahi to kar
 bas
 ```
 
-> v2 adds typed functions, parameters, calls, returns, and recursion to the complete v1
-> core. `rokay`/`aagad` (`break`/`continue`) remain reserved and unimplemented.
+> v2 includes typed functions, parameters, calls, returns, recursion, and loop control
+> (`rokay`/`aagad`, or `break`/`continue`) alongside the original core.
 
 ## Features
 
@@ -50,22 +50,24 @@ bas
 | `true` / `false` | `sacu` / `khotu` |
 | `and` / `or` / `not` | `ane` / `athva` / `nathi` |
 | `function` / `return` | `kaam` / `pachu aap` |
+| `break` / `continue` | `rokay` / `aagad` |
 
 Full grammar, precedence, types, scope, and error-recovery spec:
 [GRAMMAR.md](./GRAMMAR.md). Concept-to-syllabus mapping and design rationale:
 [PROJECT_DESCRIPTION.md](./PROJECT_DESCRIPTION.md).
 
-## Compiler Core (initial implementation)
+## Compiler Core
 
 Implemented so far in `src/`: source-aware lexer, recursive-descent parser, static type
-checker, stack-VM bytecode generator/interpreter, TAC generation, independently toggleable
-constant folding and dead-code elimination, and inspectable graph-coloring register
-pseudo-assembly with spills, and the React browser visualizer with phase tabs, optimization
-toggles, demo programs, and VM stepping. Language samples and smoke checks are in
+checker with definite-assignment analysis, stack-VM bytecode generator/interpreter, TAC
+generation, independently toggleable constant folding and dead-code elimination, and
+inspectable graph-coloring register pseudo-assembly with spills. The React browser visualizer
+provides phase tabs, optimization toggles, demo programs, and VM stepping. Language samples
+and smoke checks are in
 `samples/` and `test/`.
 
-Run a source file with `bun run cli samples/branching.guj`, or build and run it with
-`bun run start samples/branching.guj`.
+Run a source file with `bun run cli samples/branching.guj`. For the compiled CLI, run
+`bun run build:core` first, then `bun run start samples/branching.guj`.
 
 ## Project Structure
 
@@ -73,7 +75,7 @@ Run a source file with `bun run cli samples/branching.guj`, or build and run it 
 gujlang/
 ├── src/                # lexer, parser, semantics, TAC, optimizer, VM, register allocator, CLI
 ├── visualizer/         # React UI and responsive teaching views
-├── samples/            # demo programs + expected outputs (smoke-test fixtures)
+├── samples/            # runnable and intentionally invalid language examples
 ├── test/               # smoke suite
 ├── GRAMMAR.md
 ├── PROJECT_BRIEF.md
@@ -88,9 +90,10 @@ gujlang/
 bun install
 bun run lint
 bun run typecheck
-bun run test    # compiler core checks, including samples/ smoke tests
+bun run test    # production build followed by compiler smoke checks
 bun run dev      # start the browser visualizer at localhost
 bun run cli samples/branching.guj  # run a sample through the CLI
+bun run build:core
 bun run start samples/branching.guj # run a compiled CLI build
 bun run build   # production build — verify it works fully offline before demoing
 ```

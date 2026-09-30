@@ -37,6 +37,11 @@ const demos: Demo[] = [
     source: `kaam factorial(n: int) -> int kar\n  jo n <= 1 to kar\n    pachu aap 1\n  bas\n  pachu aap n * factorial(n - 1)\nbas\nrakh answer = factorial(5)\nbolo answer`,
     description: "A recursive function with typed parameters, branching, and a return value.",
   },
+  {
+    title: "Loop control",
+    source: `rakh i = 0\njyare i < 8 kar\n  i = i + 1\n  jo i == 2 to kar\n    aagad\n  bas\n  jo i == 6 to kar\n    rokay\n  bas\n  bolo i\nbas`,
+    description: "Skip one iteration and then exit the nearest loop early.",
+  },
 ];
 const keywordRows = [
   ["if / then / else", "jo / to / nahi to"],
@@ -47,7 +52,7 @@ const keywordRows = [
   ["true / false", "sacu / khotu"],
   ["and / or / not", "ane / athva / nathi"],
   ["function / return", "kaam / pachu aap"],
-  ["break / continue", "rokay / aagad · reserved"],
+  ["break / continue", "rokay / aagad"],
 ];
 
 const initialSource = demos[0].source;
@@ -56,9 +61,12 @@ const ruleFor = (statement: Stmt) =>
     declare: "decl_stmt := 'rakh' IDENT '=' expr",
     assign: "assign_stmt := IDENT '=' expr",
     print: "print_stmt := 'bolo' (expr | STRING)",
+    call: "call_stmt := IDENT '(' arguments? ')'",
     return: "return_stmt := 'pachu aap' expr",
-    if: "if_stmt := 'jo' expr 'to' block ('nahi' 'to' block)?",
-    while: "while_stmt := 'jyare' expr block",
+    break: "break_stmt := 'rokay'",
+    continue: "continue_stmt := 'aagad'",
+    if: "if_stmt := ('jo' | 'if') expr ('to' | 'then') block (('nahi to' | 'else') block)?",
+    while: "while_stmt := ('jyare' | 'while') expr block",
   })[statement.kind];
 function AstNode({ value }: { value: unknown }) {
   if (!value || typeof value !== "object") return <span>{String(value)}</span>;
@@ -88,7 +96,11 @@ function AstNode({ value }: { value: unknown }) {
                           ? "STRING (valid directly after bolo)"
                           : (ruleFor(node as unknown as Stmt) ?? String(node.kind));
   return (
-    <details className="ast-node" open title={title}>
+    <details
+      className="ast-node"
+      open={node.kind === "module" || node.kind === "program"}
+      title={title}
+    >
       <summary>
         <span className="node-kind">{String(node.kind)}</span>
         {node.name ? <code>{String(node.name)}</code> : null}
@@ -160,40 +172,58 @@ function historyFor(
   result: CompileResult,
 ): { statement: string; snapshot: { name: string; type: TypeName | string }[] }[] {
   if (!result.program) return [];
-  const known = new Map((result.symbols ?? []).map((symbol) => [symbol.name, symbol.type]));
   const history: { statement: string; snapshot: { name: string; type: TypeName | string }[] }[] =
     [];
-  const visit = (statements: Stmt[]) => {
+  const visit = (
+    statements: Stmt[],
+    scope: string,
+    symbols: Map<string, TypeName | string>,
+    known: Map<string, TypeName | string>,
+  ) => {
     for (const statement of statements) {
       if (statement.kind === "declare")
-        history.push({
-          statement: `declare ${statement.name}`,
-          snapshot: [
-            ...history.reduce((map, row) => {
-              for (const item of row.snapshot) map.set(item.name, item.type);
-              return map;
-            }, new Map<string, TypeName | string>()),
-            [
-              statement.name,
-              result.expressionTypes?.get(statement.initializer) ??
-                known.get(statement.name) ??
-                "unknown",
-            ] as [string, TypeName | string],
-          ].map(([name, type]) => ({ name, type })),
-        });
-      else
-        history.push({
-          statement: statement.kind === "assign" ? `assign ${statement.name}` : statement.kind,
-          snapshot: history.length ? history[history.length - 1].snapshot : [],
-        });
+        symbols.set(
+          statement.name,
+          result.expressionTypes?.get(statement.initializer) ??
+            known.get(statement.name) ??
+            "unknown",
+        );
+      const label =
+        statement.kind === "assign"
+          ? `assign ${statement.name}`
+          : statement.kind === "call"
+            ? `call ${statement.expression.name}`
+            : statement.kind;
+      history.push({
+        statement: scope === "global" ? label : `${scope} · ${label}`,
+        snapshot: [...symbols].map(([name, type]) => ({ name, type })),
+      });
       if (statement.kind === "if") {
-        visit(statement.thenBlock);
-        if (statement.elseBlock) visit(statement.elseBlock);
+        visit(statement.thenBlock, scope, symbols, known);
+        if (statement.elseBlock) visit(statement.elseBlock, scope, symbols, known);
       }
-      if (statement.kind === "while") visit(statement.body);
+      if (statement.kind === "while") visit(statement.body, scope, symbols, known);
     }
   };
-  visit(result.program.statements);
+  const globalSymbols = (result.symbols ?? []).filter((symbol) => symbol.role === "global");
+  visit(
+    result.program.statements,
+    "global",
+    new Map(),
+    new Map(globalSymbols.map((symbol) => [symbol.name, symbol.type])),
+  );
+  for (const fn of result.functions ?? []) {
+    const functionSymbols = (result.symbols ?? []).filter(
+      (symbol) => symbol.scope === fn.name && symbol.role !== "function",
+    );
+    const parameters = functionSymbols.filter((symbol) => symbol.role === "parameter");
+    visit(
+      fn.body,
+      fn.name,
+      new Map(parameters.map((symbol) => [symbol.name, symbol.type])),
+      new Map(functionSymbols.map((symbol) => [symbol.name, symbol.type])),
+    );
+  }
   return history;
 }
 
@@ -526,12 +556,16 @@ export default function App() {
                 ) : (
                   <EmptyState text="No valid declarations to show yet." />
                 )}
-                {result.symbols.some((symbol) => symbol.role !== "global") && (
+                {result.symbols.some(
+                  (symbol) => symbol.role === "parameter" || symbol.role === "local",
+                ) && (
                   <div className="history-list function-symbols">
                     {[
                       ...new Set(
                         result.symbols
-                          .filter((symbol) => symbol.role !== "global")
+                          .filter(
+                            (symbol) => symbol.role === "parameter" || symbol.role === "local",
+                          )
                           .map((symbol) => symbol.scope),
                       ),
                     ].map((scope) => (
@@ -541,7 +575,11 @@ export default function App() {
                           <strong>{scope} · local frame</strong>
                           <div className="symbol-snapshot">
                             {result.symbols
-                              .filter((symbol) => symbol.scope === scope)
+                              .filter(
+                                (symbol) =>
+                                  symbol.scope === scope &&
+                                  (symbol.role === "parameter" || symbol.role === "local"),
+                              )
                               .map((symbol, index) => (
                                 <span key={`${scope}-${symbol.name}-${index}`}>
                                   <code>{symbol.name}</code>
@@ -554,6 +592,32 @@ export default function App() {
                         </div>
                       </article>
                     ))}
+                  </div>
+                )}
+                {result.symbols.some((symbol) => symbol.role === "function") && (
+                  <div className="history-list function-symbols">
+                    {result.symbols
+                      .filter((symbol) => symbol.role === "function")
+                      .map((symbol) => (
+                        <article key={`function-${symbol.name}`} className="history-step">
+                          <span className="history-index">FN</span>
+                          <div>
+                            <strong>{symbol.name} · function</strong>
+                            <div className="symbol-snapshot">
+                              <span>
+                                <code>
+                                  (
+                                  {symbol.parameters
+                                    ?.map((parameter) => `${parameter.name}: ${parameter.type}`)
+                                    .join(", ")}
+                                  ) → {symbol.type}
+                                </code>
+                                <small>signature</small>
+                              </span>
+                            </div>
+                          </div>
+                        </article>
+                      ))}
                   </div>
                 )}
               </section>
@@ -728,7 +792,10 @@ export default function App() {
                           ))}
                         </p>
                         <small>OUTPUT</small>
-                        <p className="output-box">{frame?.output.join("\n") || "No output yet"}</p>
+                        <p className="output-box">
+                          {result.runtime?.output.slice(0, frame?.outputLength ?? 0).join("\n") ||
+                            "No output yet"}
+                        </p>
                       </div>
                     </div>
                   </>
@@ -968,10 +1035,12 @@ bolo valid`}</pre>
                       </p>
                     </article>
                     <article className="documentation-card">
-                      <span className="demo-label">V2 BOUNDARY</span>
+                      <span className="demo-label">LOOP CONTROL</span>
                       <p>
-                        <code>rokay</code> and <code>aagad</code> (break and continue) remain
-                        reserved, but are not part of the implemented language yet.
+                        <code>rokay</code> exits the nearest enclosing loop. <code>aagad</code>{" "}
+                        skips to its next condition check. Both must appear inside a{" "}
+                        <code>jyare</code>
+                        loop, including when nested in a conditional.
                       </p>
                       <button
                         type="button"
@@ -1096,16 +1165,40 @@ bolo valid`}</pre>
                     </p>
                   </div>
                   <div className="guide-links">
-                    <button type="button" onClick={() => inspectPhase("tokens")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDocumentation(false);
+                        inspectPhase("tokens");
+                      }}
+                    >
                       Inspect tokens →
                     </button>
-                    <button type="button" onClick={() => inspectPhase("syntax")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDocumentation(false);
+                        inspectPhase("syntax");
+                      }}
+                    >
                       Inspect the AST →
                     </button>
-                    <button type="button" onClick={() => inspectPhase("ir")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDocumentation(false);
+                        inspectPhase("ir");
+                      }}
+                    >
                       Inspect TAC and optimizations →
                     </button>
-                    <button type="button" onClick={() => inspectPhase("assembly")}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDocumentation(false);
+                        inspectPhase("assembly");
+                      }}
+                    >
                       Inspect register allocation →
                     </button>
                   </div>
@@ -1170,7 +1263,11 @@ function CodeList({
       {lines.length ? (
         <ol>
           {lines.map((line, index) => {
-            const note = annotations.find((annotation) => line.includes(annotation.split(":")[0]));
+            const assignmentTarget = line.split(" = ", 1)[0];
+            const note = annotations.find((annotation) => {
+              const separator = annotation.lastIndexOf(": ");
+              return separator > 0 && annotation.slice(0, separator) === assignmentTarget;
+            });
             return (
               <li key={`${index}-${line}`}>
                 <code>{line}</code>

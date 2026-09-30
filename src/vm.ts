@@ -15,7 +15,7 @@ export type TraceFrame = {
   instruction: Instruction;
   stack: (number | boolean | string)[];
   variables: Record<string, number | boolean | string>;
-  output: string[];
+  outputLength: number;
   functionName?: string;
   callDepth?: number;
 };
@@ -118,6 +118,8 @@ export function run(
         const value = stack.pop();
         if (value === undefined) throw new Error("Stack underflow");
         output.push(String(value));
+      } else if (ins.op === "POP") {
+        if (stack.pop() === undefined) throw new Error("Stack underflow");
       } else if (ins.op === "JUMP") pc = ins.target;
       else if (ins.op === "JUMP_IF_FALSE") {
         const value = stack.pop();
@@ -169,7 +171,7 @@ export function run(
           instruction: ins,
           stack: [...stack],
           variables: { ...variables },
-          output: [...output],
+          outputLength: output.length,
           functionName,
           callDepth: calls.length,
         });

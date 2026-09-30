@@ -25,7 +25,6 @@ const aliases = new Map<string, string>([
   ["if", "IF"],
   ["to", "THEN"],
   ["then", "THEN"],
-  ["nahi", "NOT_OR_ELSE"],
   ["else", "ELSE"],
   ["kaam", "FUNCTION"],
   ["function", "FUNCTION"],
@@ -51,10 +50,10 @@ const aliases = new Map<string, string>([
   ["or", "OR"],
   ["nathi", "NOT"],
   ["not", "NOT"],
-  ["rokay", "UNSUPPORTED"],
-  ["break", "UNSUPPORTED"],
-  ["aagad", "UNSUPPORTED"],
-  ["continue", "UNSUPPORTED"],
+  ["rokay", "BREAK"],
+  ["break", "BREAK"],
+  ["aagad", "CONTINUE"],
+  ["continue", "CONTINUE"],
 ]);
 
 export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[] } {
@@ -127,12 +126,8 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
       if (type) {
         const tokenType = type.startsWith("TYPE_") ? "IDENT" : type;
         emit(
-          type === "NOT_OR_ELSE"
-            ? "keyword"
-            : type === "AND" || type === "OR" || type === "NOT"
-              ? "operator"
-              : "keyword",
-          type === "NOT_OR_ELSE" ? "NOT" : tokenType,
+          type === "AND" || type === "OR" || type === "NOT" ? "operator" : "keyword",
+          tokenType,
           start,
           tokenType === "IDENT" ? word : undefined,
         );
@@ -191,19 +186,15 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
       continue;
     }
     const two = source.slice(i, i + 2);
-    if ([">=", "<=", "==", "!=", "&&", "||", "->"].includes(two)) {
+    if ([">=", "<=", "==", "!=", "->"].includes(two)) {
       advance();
       advance();
-      emit(
-        two === "->" ? "punctuation" : "operator",
-        ({ "&&": "AND", "||": "OR", "->": "ARROW" } as Record<string, string>)[two] ?? two,
-        start,
-      );
+      emit(two === "->" ? "punctuation" : "operator", two === "->" ? "ARROW" : two, start);
       continue;
     }
-    if ("+-*/><!".includes(ch)) {
+    if ("+-*/><".includes(ch)) {
       advance();
-      emit("operator", ch === "!" ? "NOT_SYMBOL" : ch, start);
+      emit("operator", ch, start);
       continue;
     }
     if ("=():,".includes(ch)) {

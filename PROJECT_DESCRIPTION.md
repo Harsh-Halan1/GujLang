@@ -20,10 +20,9 @@ whole language" is Gujarati.
 
 ## 2. Language Overview: GujLang (v2)
 
-V2 includes the complete v1 core plus typed functions, parameters, calls, returns, and
-recursion. Functions use call-by-value and have isolated local frames; they cannot read
-global or caller variables. `rokay`/`aagad` (`break`/`continue`) remain reserved keywords
-without grammar or runtime behavior (see GRAMMAR.md §1).
+V2 includes the complete v1 core plus typed functions, parameters, calls, returns,
+recursion, and nearest-loop `rokay`/`aagad` (`break`/`continue`). Functions use call-by-value
+and isolated local frames; they cannot read global or caller variables.
 
 ### 2.1 Keyword table
 | English keyword | GujLang keyword |
@@ -36,6 +35,7 @@ without grammar or runtime behavior (see GRAMMAR.md §1).
 | `true` / `false` | `sacu` / `khotu` |
 | `and` / `or` / `not` | `ane` / `athva` / `nathi` |
 | `function` / `return` | `kaam` / `pachu aap` |
+| `break` / `continue` | `rokay` / `aagad` |
 
 ### 2.2 Sample program
 ```
@@ -143,7 +143,7 @@ an optimization and its before/after effect, rather than a single fixed pipeline
 | Invalid types (e.g. `5 + sacu`) | Caught at semantic analysis, reported bilingually, compilation halts before codegen — never generate code from an invalid program |
 | Division by zero | Caught by the VM at runtime; bilingual runtime error, graceful halt, no crash |
 | Infinite loops | VM enforces a hard instruction-count cap (default ~100,000); execution halts with a clear message instead of freezing |
-| Sample programs | Kept in `samples/` with expected outputs; run as a smoke test before any lab/demo to confirm they still pass after code changes |
+| Sample programs | Runnable and intentionally invalid examples live in `samples/`; the smoke suite checks representative outputs and diagnostics |
 
 **On the "no backend / dependency-free" claim:** this must be verified, not assumed —
 run an actual production build (`bun run build`), serve the static output with the

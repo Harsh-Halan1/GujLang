@@ -7,7 +7,8 @@ export type SymbolInfo = {
   type: ValueType;
   declaredAt: Span;
   scope: "global" | string;
-  role: "global" | "parameter" | "local";
+  role: "global" | "parameter" | "local" | "function";
+  parameters?: { name: string; type: ValueType }[];
 };
 
 export function analyze(module: Module): {
@@ -26,6 +27,14 @@ export function analyze(module: Module): {
     if (signatures.has(fn.name))
       report("S011", `Function '${fn.name}' is already declared`, fn.span);
     else signatures.set(fn.name, fn);
+    symbols.push({
+      name: fn.name,
+      type: fn.returnType,
+      declaredAt: fn.span,
+      scope: "functions",
+      role: "function",
+      parameters: fn.parameters.map(({ name, type }) => ({ name, type })),
+    });
   }
 
   const infer = (e: Expr, env: Map<string, ValueType>, scope: string): TypeName => {
@@ -124,15 +133,14 @@ export function analyze(module: Module): {
     env: Map<string, ValueType>,
     scope: string,
     returnType?: ValueType,
+    loopDepth = 0,
   ) => {
     for (const stmt of items) {
       if (stmt.kind === "declare") {
         const valueType = infer(stmt.initializer, env, scope);
         if (env.has(stmt.name))
           report("S007", `Variable '${stmt.name}' is already declared in ${scope}`, stmt.span);
-        else if (valueType === "string")
-          report("S008", "String literals can only be printed directly", stmt.span);
-        else if (valueType !== "error") {
+        else if (valueType !== "error" && valueType !== "string") {
           env.set(stmt.name, valueType);
           symbols.push({
             name: stmt.name,
@@ -154,30 +162,106 @@ export function analyze(module: Module): {
           );
       } else if (stmt.kind === "print") {
         infer(stmt.value, env, scope);
+      } else if (stmt.kind === "call") {
+        infer(stmt.expression, env, scope);
       } else if (stmt.kind === "return") {
         const actual = infer(stmt.value, env, scope);
         if (!returnType)
           report("S015", "Return statements are only valid inside a function", stmt.span);
-        else if (actual === "string") report("S016", "Functions cannot return strings", stmt.span);
         else if (actual !== "error" && actual !== returnType)
           report(
             "S017",
             `Return value must have type ${returnType}, received ${actual}`,
             stmt.span,
           );
+      } else if (stmt.kind === "break" || stmt.kind === "continue") {
+        if (loopDepth === 0)
+          report(
+            stmt.kind === "break" ? "S020" : "S021",
+            `${stmt.kind === "break" ? "rokay" : "aagad"} is only valid inside a while loop`,
+            stmt.span,
+          );
       } else {
         const condition = infer(stmt.condition, env, scope);
         if (condition !== "bool" && condition !== "error")
           report("S010", "Condition must have type bool", stmt.condition.span);
-        checkStatements(stmt.kind === "if" ? stmt.thenBlock : stmt.body, env, scope, returnType);
+        checkStatements(
+          stmt.kind === "if" ? stmt.thenBlock : stmt.body,
+          env,
+          scope,
+          returnType,
+          loopDepth + (stmt.kind === "while" ? 1 : 0),
+        );
         if (stmt.kind === "if" && stmt.elseBlock)
-          checkStatements(stmt.elseBlock, env, scope, returnType);
+          checkStatements(stmt.elseBlock, env, scope, returnType, loopDepth);
       }
     }
   };
 
+  const checkDefiniteAssignment = (
+    statements: Stmt[],
+    declared: Set<string>,
+    assigned: Set<string>,
+    scope: string,
+  ): Set<string> => {
+    const checkExpr = (expr: Expr, state: Set<string>) => {
+      if (expr.kind === "variable") {
+        if (declared.has(expr.name) && !state.has(expr.name))
+          report("S022", `Variable '${expr.name}' may be uninitialized in ${scope}`, expr.span);
+      } else if (expr.kind === "call") {
+        for (const argument of expr.arguments) checkExpr(argument, state);
+      } else if (expr.kind === "unary") checkExpr(expr.operand, state);
+      else if (expr.kind === "binary") {
+        checkExpr(expr.left, state);
+        checkExpr(expr.right, state);
+      }
+    };
+
+    let state = assigned;
+    for (const stmt of statements) {
+      if (stmt.kind === "declare") {
+        checkExpr(stmt.initializer, state);
+        if (!declared.has(stmt.name)) {
+          declared.add(stmt.name);
+          state.add(stmt.name);
+        }
+      } else if (stmt.kind === "assign") {
+        checkExpr(stmt.value, state);
+        if (declared.has(stmt.name) && !state.has(stmt.name))
+          report(
+            "S022",
+            `Variable '${stmt.name}' may not exist on this path in ${scope}`,
+            stmt.span,
+          );
+        state.add(stmt.name);
+      } else if (stmt.kind === "print" || stmt.kind === "return") {
+        checkExpr(stmt.value, state);
+      } else if (stmt.kind === "call") {
+        checkExpr(stmt.expression, state);
+      } else if (stmt.kind === "if") {
+        checkExpr(stmt.condition, state);
+        const incoming = new Set(state);
+        const thenState = checkDefiniteAssignment(
+          stmt.thenBlock,
+          declared,
+          new Set(incoming),
+          scope,
+        );
+        const elseState = stmt.elseBlock
+          ? checkDefiniteAssignment(stmt.elseBlock, declared, new Set(incoming), scope)
+          : incoming;
+        state = new Set([...thenState].filter((name) => elseState.has(name)));
+      } else if (stmt.kind === "while") {
+        checkExpr(stmt.condition, state);
+        checkDefiniteAssignment(stmt.body, declared, new Set(state), scope);
+      }
+    }
+    return state;
+  };
+
   const globals = new Map<string, ValueType>();
   checkStatements(module.program.statements, globals, "global");
+  checkDefiniteAssignment(module.program.statements, new Set(), new Set(), "global scope");
   for (const fn of module.functions) {
     const env = new Map<string, ValueType>();
     for (const parameter of fn.parameters) {
@@ -195,6 +279,8 @@ export function analyze(module: Module): {
       }
     }
     checkStatements(fn.body, env, fn.name, fn.returnType);
+    const parameters = new Set(fn.parameters.map((parameter) => parameter.name));
+    checkDefiniteAssignment(fn.body, new Set(parameters), new Set(parameters), fn.name);
     if (!alwaysReturns(fn.body))
       report("S019", `Function '${fn.name}' must return ${fn.returnType} on every path`, fn.span);
   }

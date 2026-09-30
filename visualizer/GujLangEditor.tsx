@@ -13,7 +13,7 @@ import {
 } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { type MutableRefObject, useEffect, useRef } from "react";
-import { lex } from "../src/lexer";
+import { lex, type Token } from "../src/lexer";
 
 const editorTheme = EditorView.theme({
   "&": {
@@ -59,24 +59,31 @@ const syntaxStyle = syntaxHighlighting(
   ]),
 );
 
-const gujLang = StreamLanguage.define({
+type GujLangStreamState = { line: string | null; tokens: Token[]; nextToken: number };
+
+const gujLang = StreamLanguage.define<GujLangStreamState>({
   name: "GujLang",
   languageData: { indentOnInput: /^\s*(?:bas|end)\b/iu },
-  token(stream) {
+  startState: () => ({ line: null, tokens: [], nextToken: 0 }),
+  token(stream, state) {
+    if (stream.sol()) {
+      state.line = stream.string;
+      state.tokens = lex(stream.string).tokens.filter((token) => token.kind !== "eof");
+      state.nextToken = 0;
+    }
     if (stream.eatSpace()) return null;
     const rest = stream.string.slice(stream.pos);
     if (rest.startsWith("#") || rest.startsWith("//")) {
       stream.skipToEnd();
       return "comment";
     }
-    const scanned = lex(stream.string);
-    const token = scanned.tokens.find(
-      (candidate) => candidate.kind !== "eof" && candidate.span.start === stream.pos,
-    );
-    if (!token || token.span.end <= 0) {
+    while (state.tokens[state.nextToken]?.span.start < stream.pos) state.nextToken++;
+    const token = state.tokens[state.nextToken];
+    if (!token || token.span.start !== stream.pos || token.span.end <= 0) {
       stream.next();
       return "invalid";
     }
+    state.nextToken++;
     stream.pos = token.span.end;
     if (token.kind === "keyword") return "keyword";
     if (token.kind === "identifier") return "variableName";

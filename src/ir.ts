@@ -11,6 +11,7 @@ export type Instruction =
   | { op: "JUMP_IF_FALSE"; target: number }
   | { op: "FUNCTION"; name: string; parameters: string[] }
   | { op: "CALL"; name: string; argumentCount: number }
+  | { op: "POP" }
   | { op: "RETURN" }
   | { op: "HALT" };
 
@@ -33,6 +34,7 @@ export function generateTac(module: Module): TacInstruction[] {
   let temp = 0;
   let label = 0;
   let localPrefix = "";
+  const loopTargets: { breakLabel: string; continueLabel: string }[] = [];
   const fresh = () => `t${++temp}`;
   const freshLabel = () => `L${++label}`;
   const expr = (e: Expr): string => {
@@ -58,6 +60,35 @@ export function generateTac(module: Module): TacInstruction[] {
       out.push({ op: "unary", target, operator: e.op, operand });
       return target;
     }
+    if (e.kind === "binary" && (e.op === "AND" || e.op === "OR")) {
+      const left = expr(e.left);
+      const target = fresh();
+      if (e.op === "AND") {
+        const doneLabel = freshLabel();
+        const falseLabel = freshLabel();
+        out.push({ op: "ifFalse", condition: left, target: falseLabel });
+        const right = expr(e.right);
+        out.push(
+          { op: "copy", target, source: right },
+          { op: "goto", target: doneLabel },
+          { op: "label", name: falseLabel },
+          { op: "const", target, value: false },
+          { op: "label", name: doneLabel },
+        );
+      } else {
+        const doneLabel = freshLabel();
+        const rightLabel = freshLabel();
+        out.push(
+          { op: "ifFalse", condition: left, target: rightLabel },
+          { op: "const", target, value: true },
+          { op: "goto", target: doneLabel },
+          { op: "label", name: rightLabel },
+        );
+        const right = expr(e.right);
+        out.push({ op: "copy", target, source: right }, { op: "label", name: doneLabel });
+      }
+      return target;
+    }
     const left = expr(e.left),
       right = expr(e.right),
       target = fresh();
@@ -73,27 +104,36 @@ export function generateTac(module: Module): TacInstruction[] {
           source: expr(stmt.kind === "declare" ? stmt.initializer : stmt.value),
         });
       } else if (stmt.kind === "print") out.push({ op: "print", value: expr(stmt.value) });
+      else if (stmt.kind === "call") expr(stmt.expression);
       else if (stmt.kind === "return") out.push({ op: "return", value: expr(stmt.value) });
-      else if (stmt.kind === "if") {
+      else if (stmt.kind === "break") {
+        const target = loopTargets.at(-1);
+        if (target) out.push({ op: "goto", target: target.breakLabel });
+      } else if (stmt.kind === "continue") {
+        const target = loopTargets.at(-1);
+        if (target) out.push({ op: "goto", target: target.continueLabel });
+      } else if (stmt.kind === "if") {
         const condition = expr(stmt.condition),
           otherwise = freshLabel(),
-          done = freshLabel();
+          done = stmt.elseBlock ? freshLabel() : undefined;
         out.push({ op: "ifFalse", condition, target: otherwise });
         list(stmt.thenBlock);
-        if (stmt.elseBlock) out.push({ op: "goto", target: done });
+        if (stmt.elseBlock && done) out.push({ op: "goto", target: done });
         out.push({ op: "label", name: otherwise });
         if (stmt.elseBlock) {
           list(stmt.elseBlock);
-          out.push({ op: "label", name: done });
+          if (done) out.push({ op: "label", name: done });
         }
       } else {
         const head = freshLabel(),
           done = freshLabel();
+        loopTargets.push({ breakLabel: done, continueLabel: head });
         out.push({ op: "label", name: head });
         const condition = expr(stmt.condition);
         out.push({ op: "ifFalse", condition, target: done });
         list(stmt.body);
         out.push({ op: "goto", target: head }, { op: "label", name: done });
+        loopTargets.pop();
       }
     }
   };
@@ -146,6 +186,7 @@ export function formatTac(code: TacInstruction[]): string[] {
 
 export function generate(module: Module): Instruction[] {
   const code: Instruction[] = [];
+  const loops: { head: number; breaks: number[] }[] = [];
   const expr = (e: Expr) => {
     if (e.kind === "number" || e.kind === "boolean" || e.kind === "string")
       code.push({ op: "CONST", value: e.value });
@@ -156,6 +197,22 @@ export function generate(module: Module): Instruction[] {
     } else if (e.kind === "unary") {
       expr(e.operand);
       code.push({ op: "UNARY", operator: e.op });
+    } else if (e.kind === "binary" && (e.op === "AND" || e.op === "OR")) {
+      expr(e.left);
+      const branch = code.push({ op: "JUMP_IF_FALSE", target: -1 }) - 1;
+      if (e.op === "AND") {
+        expr(e.right);
+        const done = code.push({ op: "JUMP", target: -1 }) - 1;
+        code[branch] = { op: "JUMP_IF_FALSE", target: code.length };
+        code.push({ op: "CONST", value: false });
+        code[done] = { op: "JUMP", target: code.length };
+      } else {
+        code.push({ op: "CONST", value: true });
+        const done = code.push({ op: "JUMP", target: -1 }) - 1;
+        code[branch] = { op: "JUMP_IF_FALSE", target: code.length };
+        expr(e.right);
+        code[done] = { op: "JUMP", target: code.length };
+      }
     } else {
       expr(e.left);
       expr(e.right);
@@ -173,9 +230,18 @@ export function generate(module: Module): Instruction[] {
       } else if (s.kind === "print") {
         expr(s.value);
         code.push({ op: "PRINT" });
+      } else if (s.kind === "call") {
+        expr(s.expression);
+        code.push({ op: "POP" });
       } else if (s.kind === "return") {
         expr(s.value);
         code.push({ op: "RETURN" });
+      } else if (s.kind === "break") {
+        const loop = loops.at(-1);
+        if (loop) loop.breaks.push(code.push({ op: "JUMP", target: -1 }) - 1);
+      } else if (s.kind === "continue") {
+        const loop = loops.at(-1);
+        if (loop) code.push({ op: "JUMP", target: loop.head });
       } else if (s.kind === "if") {
         expr(s.condition);
         const cond = code.push({ op: "JUMP_IF_FALSE", target: -1 }) - 1;
@@ -188,11 +254,15 @@ export function generate(module: Module): Instruction[] {
         } else code[cond] = { op: "JUMP_IF_FALSE", target: code.length };
       } else {
         const head = code.length;
+        const loop = { head, breaks: [] as number[] };
+        loops.push(loop);
         expr(s.condition);
         const exit = code.push({ op: "JUMP_IF_FALSE", target: -1 }) - 1;
         list(s.body);
         code.push({ op: "JUMP", target: head });
         code[exit] = { op: "JUMP_IF_FALSE", target: code.length };
+        for (const jump of loop.breaks) code[jump] = { op: "JUMP", target: code.length };
+        loops.pop();
       }
     }
   };

@@ -42,8 +42,8 @@ export function parse(tokens: Token[]): {
     throw new ParseIssue(`Expected ${hint}`, peek());
   };
   const statementStart = () =>
-    at("DECLARE", "IF", "WHILE", "PRINT", "RETURN", "FUNCTION") ||
-    (at("IDENT") && tokens[current + 1]?.type === "=");
+    at("DECLARE", "IF", "WHILE", "PRINT", "RETURN", "BREAK", "CONTINUE", "FUNCTION") ||
+    (at("IDENT") && ["=", "("].includes(tokens[current + 1]?.type ?? ""));
 
   function typeName(): Exclude<TypeName, "string" | "error"> {
     const token = need("IDENT", "a type name (int, float, or bool)");
@@ -97,6 +97,11 @@ export function parse(tokens: Token[]): {
         span: join(start.span, initializer.span),
       };
     }
+    if (at("IDENT") && tokens[current + 1]?.type === "(") {
+      const expression = primary();
+      if (expression.kind !== "call") throw new ParseIssue("Expected a function call", start);
+      return { kind: "call", expression, span: expression.span };
+    }
     if (match("IDENT")) {
       const id = previous();
       need("=", "'='");
@@ -116,6 +121,8 @@ export function parse(tokens: Token[]): {
       const value = expression();
       return { kind: "return", value, span: join(start.span, value.span) };
     }
+    if (match("BREAK")) return { kind: "break", span: start.span };
+    if (match("CONTINUE")) return { kind: "continue", span: start.span };
     if (match("IF")) {
       const condition = expression();
       need("THEN", "'to'/'then'");
@@ -140,8 +147,6 @@ export function parse(tokens: Token[]): {
       const body = block();
       return { kind: "while", condition, body, span: join(start.span, previous().span) };
     }
-    if (match("UNSUPPORTED"))
-      throw new ParseIssue(`'${start.lexeme}' is reserved but not supported in v2`, start);
     throw new ParseIssue(`Unexpected token '${peek().lexeme || "end of input"}'`, peek());
   }
   function block(): Stmt[] {
@@ -208,12 +213,12 @@ export function parse(tokens: Token[]): {
     throw new ParseIssue(`Expected an expression, found '${t.lexeme || "end of input"}'`, t);
   }
   function unary(): Expr {
-    if (match("-", "NOT", "NOT_SYMBOL")) {
+    if (match("-")) {
       const op = previous(),
         operand = unary();
       return {
         kind: "unary",
-        op: op.type === "-" ? "-" : "not",
+        op: "-",
         operand,
         span: join(op.span, operand.span),
       };
@@ -247,7 +252,7 @@ export function parse(tokens: Token[]): {
     return left;
   }
   function notExpr(): Expr {
-    if (match("NOT", "NOT_SYMBOL")) {
+    if (match("NOT")) {
       const op = previous(),
         operand = notExpr();
       return { kind: "unary", op: "not", operand, span: join(op.span, operand.span) };

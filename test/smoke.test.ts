@@ -83,15 +83,102 @@ assert(
   "equality follows the documented same-type rule",
 );
 
-const unsupported = compile("rokay");
+const breakOutsideLoop = compile("rokay");
 assert(
-  unsupported.diagnostics.some((d) => d.message.includes("not supported in v2")),
-  "reserved keyword is explicit",
+  breakOutsideLoop.diagnostics.some((d) => d.code === "S020"),
+  "break outside a loop is rejected",
 );
 const unsupportedReturn = compile("pachu aap 1");
 assert(
   unsupportedReturn.diagnostics.some((d) => d.code === "S015"),
   "return is rejected outside a function",
+);
+
+const shortCircuitAnd = compile(`rakh x = 0
+jo x != 0 ane 10 / x > 2 to kar
+  bolo 1
+bas`);
+assert(
+  !shortCircuitAnd.diagnostics.some((d) => d.message === "Division by zero"),
+  "and short-circuits a guarded division",
+);
+const shortCircuitOr = compile("bolo sacu athva 1 / 0 > 0");
+assert(
+  shortCircuitOr.runtime?.output[0] === "true",
+  "or short-circuits when the left side is true",
+);
+
+const factorial = compile(`kaam factorial(n: int) -> int kar
+  jo n <= 1 to kar
+    pachu aap 1
+  bas
+  pachu aap n * factorial(n - 1)
+bas
+rakh result = factorial(5)
+bolo result`);
+assert(factorial.runtime?.output[0] === "120", "recursive calls return through isolated VM frames");
+assert(
+  factorial.registerAllocation?.registers["factorial::n"] !== undefined,
+  "function parameters participate in register allocation",
+);
+
+const callStatement = compile(`kaam announce() -> int kar
+  bolo "called"
+  pachu aap 0
+bas
+announce()`);
+assert(callStatement.runtime?.output[0] === "called", "standalone calls can perform side effects");
+
+const loopControl = compile(`rakh i = 0
+jyare i < 8 kar
+  i = i + 1
+  jo i == 2 to kar
+    aagad
+  bas
+  jo i == 6 to kar
+    rokay
+  bas
+  bolo i
+bas`);
+assert(
+  JSON.stringify(loopControl.runtime?.output) === JSON.stringify(["1", "3", "4", "5"]),
+  "break and continue target the nearest loop",
+);
+const continueOutsideLoop = compile("aagad");
+assert(
+  continueOutsideLoop.diagnostics.some((d) => d.code === "S021"),
+  "continue outside a loop is rejected",
+);
+
+const conditionalDeclaration = compile(`jo khotu to kar
+  rakh temp = 99
+bas
+bolo temp`);
+assert(
+  conditionalDeclaration.diagnostics.some((d) => d.code === "S022"),
+  "conditional declarations cannot be read on paths where they did not execute",
+);
+
+const deadAfterReturn = compile(`kaam value() -> int kar
+  pachu aap 1
+  bolo "unreachable"
+bas
+rakh result = value()
+bolo result`);
+assert(
+  !(deadAfterReturn.tac ?? []).some((line) => line.includes("unreachable")),
+  "DCE removes unreachable instructions after a return",
+);
+
+const shortCircuitSyntax = compile("bolo 2 * nathi sacu");
+assert(
+  shortCircuitSyntax.diagnostics.some((d) => d.phase === "parser"),
+  "not obeys the documented precedence",
+);
+const undocumentedOperators = compile("bolo sacu && khotu");
+assert(
+  undocumentedOperators.diagnostics.some((d) => d.phase === "lexer"),
+  "C-style operators are rejected",
 );
 
 const notExpression = compile("bolo nathi nathi sacu");
@@ -113,6 +200,19 @@ const recovery = compile("rakh = 1\nbolo 2\nrakh = 3");
 assert(
   recovery.diagnostics.filter((d) => d.phase === "parser").length >= 2,
   "parser reports multiple errors",
+);
+const recoveredSemantics = compile("rakh = 1\nbolo unknown\nrakh ready = sacu\nready = 2");
+assert(
+  recoveredSemantics.diagnostics.some((d) => d.code === "P001"),
+  "parser errors are retained after recovery",
+);
+assert(
+  recoveredSemantics.diagnostics.some((d) => d.code === "S001"),
+  "semantic analysis continues after parser recovery",
+);
+assert(
+  recoveredSemantics.diagnostics.some((d) => d.code === "S009"),
+  "later type errors are reported after parser recovery",
 );
 
 console.log("GujLang smoke checks passed");
