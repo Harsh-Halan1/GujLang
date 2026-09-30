@@ -21,7 +21,16 @@ export function analyze(module: Module): {
   const diagnostics: Diagnostic[] = [];
   const signatures = new Map<string, FunctionDecl>();
   const report = (code: string, message: string, span: Span) =>
-    diagnostics.push(diagnostic("semantic", code, message, `Arth: ${message}`, span));
+    diagnostics.push(diagnostic("semantic", code, message, gujlangMessage(code), span));
+
+  const containsStringLiteral = (expr: Expr): boolean => {
+    if (expr.kind === "string") return true;
+    if (expr.kind === "call") return expr.arguments.some(containsStringLiteral);
+    if (expr.kind === "unary") return containsStringLiteral(expr.operand);
+    if (expr.kind === "binary")
+      return containsStringLiteral(expr.left) || containsStringLiteral(expr.right);
+    return false;
+  };
 
   for (const fn of module.functions) {
     if (signatures.has(fn.name))
@@ -95,14 +104,22 @@ export function analyze(module: Module): {
           type = "error";
         } else type = "bool";
       } else if (["+", "-", "*", "/"].includes(e.op)) {
-        if (!["int", "float"].includes(left) || !["int", "float"].includes(right)) {
+        if (e.op === "+" && (left === "string" || right === "string")) {
+          if (
+            !["int", "float", "bool", "string"].includes(left) ||
+            !["int", "float", "bool", "string"].includes(right)
+          ) {
+            report("S005", `Operator '${e.op}' requires printable operands`, e.span);
+            type = "error";
+          } else type = "string";
+        } else if (!["int", "float"].includes(left) || !["int", "float"].includes(right)) {
           report("S005", `Operator '${e.op}' requires numeric operands`, e.span);
           type = "error";
         } else type = e.op === "/" || left === "float" || right === "float" ? "float" : "int";
       } else {
         const equality = e.op === "==" || e.op === "!=";
         const valid = equality
-          ? left === right
+          ? left === right && left !== "string"
           : ["int", "float"].includes(left) && ["int", "float"].includes(right);
         if (!valid) {
           report("S006", `Incompatible operand types for '${e.op}'`, e.span);
@@ -136,6 +153,18 @@ export function analyze(module: Module): {
     loopDepth = 0,
   ) => {
     for (const stmt of items) {
+      if (
+        stmt.kind !== "print" &&
+        ((stmt.kind === "declare" && containsStringLiteral(stmt.initializer)) ||
+          (stmt.kind === "assign" && containsStringLiteral(stmt.value)) ||
+          (stmt.kind === "return" && containsStringLiteral(stmt.value)) ||
+          ((stmt.kind === "if" || stmt.kind === "while") && containsStringLiteral(stmt.condition)))
+      )
+        report(
+          "S023",
+          "String literals and concatenation are only valid in print statements",
+          stmt.span,
+        );
       if (stmt.kind === "declare") {
         const valueType = infer(stmt.initializer, env, scope);
         if (env.has(stmt.name))
@@ -285,4 +314,32 @@ export function analyze(module: Module): {
       report("S019", `Function '${fn.name}' must return ${fn.returnType} on every path`, fn.span);
   }
   return { symbols, expressionTypes, diagnostics };
+}
+
+function gujlangMessage(code: string): string {
+  return (
+    {
+      S001: "Aa variable aa scope ma declare nathi kari.",
+      S002: "'nathi' mate boolean value jaruri chhe.",
+      S003: "Unary '-' mate number jaruri chhe.",
+      S004: "Boolean operators ma banne operands boolean hova joie.",
+      S005: "Aa operator mate numeric operands jaruri chhe.",
+      S006: "Aa operator mate operands na types compatible hova joie.",
+      S007: "Aa variable aa scope ma pehlethi declare chhe.",
+      S009: "Aapeli value no type variable na type sathe match thato nathi.",
+      S010: "Condition boolean hovi joie.",
+      S011: "Aa function pehlethi declare chhe.",
+      S012: "Aa function declare kari nathi.",
+      S013: "Function call ma arguments ni sankhya barabar nathi.",
+      S014: "Function argument no type expected type sathe match thato nathi.",
+      S015: "'pachu aap' fakt function ni andar vapri shakai.",
+      S017: "Return value no type function na declared return type sathe match thavo joie.",
+      S018: "Aa parameter nu naam pehlethi vaprayu chhe.",
+      S019: "Function na darek path mathi return value aapvi jaruri chhe.",
+      S020: "'rokay' fakt while loop ni andar vapri shakai.",
+      S021: "'aagad' fakt while loop ni andar vapri shakai.",
+      S022: "Aa variable aa path par hamesha initialized nathi.",
+      S023: "String ane concatenation fakt print statement ma vapri shakai.",
+    }[code] ?? "Semantic bhul: source code na niyamo tapaso."
+  );
 }

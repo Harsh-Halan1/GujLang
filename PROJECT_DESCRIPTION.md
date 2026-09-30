@@ -41,14 +41,15 @@ and isolated local frames; they cannot read global or caller variables.
 ```
 rakh x = 5
 jo x > 3 to kar
-    bolo "moto che"
+    bolo "x moto che: " + x
 bas
 nahi to kar
     bolo "nano che"
 bas
 ```
 Every `kar` is closed by exactly one `bas` — the single block-delimiter rule (full
-grammar in GRAMMAR.md §2).
+grammar in GRAMMAR.md §3). Within `bolo`/`print`, strings can be concatenated with scalar
+values, such as `bolo "x = " + x`; string-bearing expressions remain restricted to print.
 
 ## 3. Localization Scope — what is and isn't GujLang
 
@@ -86,6 +87,9 @@ beyond the keyword layer described in §3.
 | **Optimization** | Independently selectable passes: constant folding, dead code elimination (see §7 for how this ties to CLO 3) | VII |
 | **Code Generation** | Dual backend — see §7 | VI, VII |
 
+Keyword lookup is case-insensitive. The binding grammar also specifies definite-assignment
+checks for values declared inside conditionals or loops, alongside the flat-scope rule.
+
 ## 6. The Visualizer
 
 The visualizer's job is to show **why** each phase produced what it produced, not just
@@ -103,7 +107,8 @@ the output:
   folded line annotated with which rule fired
 - **Codegen / VM execution** — generated instructions plus a step-through **Run** view
   showing VM stack, program counter, and output as it executes; register views belong to
-  the pseudo-assembly allocation panel, not the stack VM
+  the pseudo-assembly allocation panel, not the stack VM. Run presents the current VM
+  operation beside VM state, with program output in a separate panel below the state.
 - **Errors & recovery tab** — one or more deliberately broken sample programs, each
   showing multiple detected errors in a single pass, with line numbers, bilingual
   messages, and (for syntax errors) the synchronization point used to recover
@@ -145,11 +150,11 @@ an optimization and its before/after effect, rather than a single fixed pipeline
 | Infinite loops | VM enforces a hard instruction-count cap (default ~100,000); execution halts with a clear message instead of freezing |
 | Sample programs | Runnable and intentionally invalid examples live in `samples/`; the smoke suite checks representative outputs and diagnostics |
 
-**On the "no backend / dependency-free" claim:** this must be verified, not assumed —
-run an actual production build (`bun run build`), serve the static output with the
-network disconnected, and confirm zero failed requests before presenting this as a
-property of the tool. If the build turns out to need any external call, the docs should
-say so plainly rather than claim full independence.
+**Offline check status:** the development setup has been manually checked by loading the app,
+switching the browser to offline mode, reloading, and running a simple program successfully.
+This is evidence for that dev setup. To verify production hosting, also serve the built static
+output and repeat the check with the network disconnected; hosting and browser-specific behavior
+can differ from the dev server.
 
 ## 9. Tech Stack
 

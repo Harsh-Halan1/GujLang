@@ -74,7 +74,10 @@ export function run(
         let value: Value;
         switch (ins.operator) {
           case "+":
-            value = (left as number) + (right as number);
+            value =
+              typeof left === "string" || typeof right === "string"
+                ? String(left) + String(right)
+                : (left as number) + (right as number);
             break;
           case "-":
             value = (left as number) - (right as number);

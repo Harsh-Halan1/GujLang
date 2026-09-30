@@ -1,6 +1,15 @@
-import { lazy, Suspense, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  type KeyboardEvent as ReactKeyboardEvent,
+  Suspense,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Stmt, TypeName } from "../src/ast";
 import { type CompileResult, compile } from "../src/compiler";
+import type { Instruction } from "../src/ir";
 import type { Token } from "../src/lexer";
 import type { GujLangEditorHandle } from "./GujLangEditor";
 
@@ -56,11 +65,34 @@ const keywordRows = [
 ];
 
 const initialSource = demos[0].source;
+function handleModalKeyDown(event: ReactKeyboardEvent<HTMLElement>, close: () => void) {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    close();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const focusable = event.currentTarget.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  );
+  const first = focusable.item(0);
+  const last = focusable.item(focusable.length - 1);
+  if (!first || !last) {
+    event.preventDefault();
+  } else if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 const ruleFor = (statement: Stmt) =>
   ({
     declare: "decl_stmt := 'rakh' IDENT '=' expr",
     assign: "assign_stmt := IDENT '=' expr",
-    print: "print_stmt := 'bolo' (expr | STRING)",
+    print: "print_stmt := 'bolo' expr",
     call: "call_stmt := IDENT '(' arguments? ')'",
     return: "return_stmt := 'pachu aap' expr",
     break: "break_stmt := 'rokay'",
@@ -93,7 +125,7 @@ function AstNode({ value }: { value: unknown }) {
                       : node.kind === "boolean"
                         ? "primary := boolean literal"
                         : node.kind === "string"
-                          ? "STRING (valid directly after bolo)"
+                          ? "STRING (valid inside bolo expressions)"
                           : (ruleFor(node as unknown as Stmt) ?? String(node.kind));
   return (
     <details
@@ -237,9 +269,26 @@ export default function App() {
   const [showDocumentation, setShowDocumentation] = useState(false);
   const [activeGuide, setActiveGuide] = useState<Guide>("language");
   const [traceIndex, setTraceIndex] = useState(0);
+  const [autoAdvance, setAutoAdvance] = useState(false);
   const [runRequested, setRunRequested] = useState(false);
   const editor = useRef<GujLangEditorHandle>(null);
+  const documentationTrigger = useRef<HTMLButtonElement>(null);
+  const documentationClose = useRef<HTMLButtonElement>(null);
+  const keywordTrigger = useRef<HTMLButtonElement>(null);
+  const keywordClose = useRef<HTMLButtonElement>(null);
+  const wasDocumentationOpen = useRef(false);
+  const wereKeywordsOpen = useRef(false);
   const sourceEpoch = useRef(0);
+  useEffect(() => {
+    if (showDocumentation) documentationClose.current?.focus();
+    else if (wasDocumentationOpen.current) documentationTrigger.current?.focus();
+    wasDocumentationOpen.current = showDocumentation;
+  }, [showDocumentation]);
+  useEffect(() => {
+    if (showKeywords) keywordClose.current?.focus();
+    else if (wereKeywordsOpen.current) keywordTrigger.current?.focus();
+    wereKeywordsOpen.current = showKeywords;
+  }, [showKeywords]);
   const result = useMemo(
     () =>
       compile(source, {
@@ -254,6 +303,18 @@ export default function App() {
   const history = historyFor(result);
   const trace = result.runtime?.trace ?? [];
   const frame = trace[Math.min(traceIndex, Math.max(0, trace.length - 1))];
+  useEffect(() => {
+    if (!autoAdvance) return;
+    if (!trace.length || traceIndex >= trace.length - 1) {
+      setAutoAdvance(false);
+      return;
+    }
+    const timer = window.setTimeout(
+      () => setTraceIndex((index) => Math.min(index + 1, trace.length - 1)),
+      500,
+    );
+    return () => window.clearTimeout(timer);
+  }, [autoAdvance, trace.length, traceIndex]);
   const selectToken = (token: Token) => {
     editor.current?.selectRange(token.span.start, token.span.end);
   };
@@ -267,6 +328,7 @@ export default function App() {
     sourceEpoch.current++;
     setSource(demos[next].source);
     setTraceIndex(0);
+    setAutoAdvance(false);
     setRunRequested(false);
   };
   const tabs: { id: Tab; label: string; count?: number }[] = [
@@ -297,12 +359,18 @@ export default function App() {
           <span className="status">
             <i /> Core compiler ready
           </span>
-          <button type="button" className="quiet" onClick={() => setShowKeywords(true)}>
+          <button
+            ref={keywordTrigger}
+            type="button"
+            className="quiet"
+            onClick={() => setShowKeywords(true)}
+          >
             Keyword guide
           </button>
           <button
             type="button"
             className="quiet documentation-trigger"
+            ref={documentationTrigger}
             onClick={() => setShowDocumentation(true)}
           >
             Documentation
@@ -311,6 +379,7 @@ export default function App() {
             type="button"
             className="primary"
             onClick={() => {
+              setAutoAdvance(false);
               setRunRequested(true);
               setActiveTab("run");
               setTraceIndex(0);
@@ -335,7 +404,7 @@ export default function App() {
         <div className="hero-card">
           <span className="hero-card-icon">⌘</span>
           <div>
-            <strong>
+            <strong role="status" aria-live="polite">
               {successful
                 ? "Compilation succeeded"
                 : `${diagnosticCount} issue${diagnosticCount === 1 ? "" : "s"} found`}
@@ -366,6 +435,7 @@ export default function App() {
                 onChange={(nextSource) => {
                   setSource(nextSource);
                   setTraceIndex(0);
+                  setAutoAdvance(false);
                   setRunRequested(false);
                 }}
               />
@@ -373,7 +443,8 @@ export default function App() {
           </div>
           <div className="editor-footer">
             <span>
-              <span className="keycap">⌘</span> Editing recompiles each phase
+              <span className="keycap">Tab</span> indent · <span className="keycap">Shift+Tab</span>{" "}
+              outdent · 2 spaces
             </span>
             <div>
               <button
@@ -382,6 +453,7 @@ export default function App() {
                 onClick={() => {
                   sourceEpoch.current++;
                   setSource("");
+                  setAutoAdvance(false);
                   setRunRequested(false);
                 }}
               >
@@ -394,6 +466,7 @@ export default function App() {
                   sourceEpoch.current++;
                   setSource(initialSource);
                   setDemoIndex(0);
+                  setAutoAdvance(false);
                   setRunRequested(false);
                 }}
               >
@@ -435,6 +508,7 @@ export default function App() {
               <button
                 type="button"
                 className={activeTab === tab.id ? "active" : ""}
+                aria-current={activeTab === tab.id ? "page" : undefined}
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
               >
@@ -740,6 +814,7 @@ export default function App() {
                     <div className="step-controls">
                       <button
                         type="button"
+                        disabled={traceIndex === 0}
                         onClick={() => setTraceIndex(Math.max(0, traceIndex - 1))}
                       >
                         ← Previous
@@ -749,12 +824,32 @@ export default function App() {
                       </span>
                       <button
                         type="button"
+                        disabled={traceIndex >= trace.length - 1}
                         onClick={() => setTraceIndex(Math.min(trace.length - 1, traceIndex + 1))}
                       >
                         Next →
                       </button>
+                      <button
+                        type="button"
+                        disabled={traceIndex >= trace.length - 1}
+                        onClick={() => {
+                          setAutoAdvance(false);
+                          setTraceIndex(trace.length - 1);
+                        }}
+                      >
+                        Final step
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={autoAdvance}
+                        disabled={traceIndex >= trace.length - 1}
+                        onClick={() => setAutoAdvance((playing) => !playing)}
+                      >
+                        {autoAdvance ? "Pause" : "Auto step"}
+                      </button>
                     </div>
                     <input
+                      id="execution-step"
                       className="trace-slider"
                       type="range"
                       min={0}
@@ -762,40 +857,53 @@ export default function App() {
                       value={Math.min(traceIndex, trace.length - 1)}
                       onChange={(event) => setTraceIndex(Number(event.target.value))}
                     />
+                    <label className="visually-hidden" htmlFor="execution-step">
+                      Execution step
+                    </label>
                     <div className="vm-grid">
-                      <CodeList
-                        title={`PC ${frame?.pc ?? 0} · current instruction`}
-                        lines={[frame ? JSON.stringify(frame.instruction) : "—"]}
-                      />
-                      <div className="vm-state">
-                        <h3>VM state after instruction</h3>
-                        <small>CALL FRAME</small>
-                        <p>
-                          {frame?.functionName ?? "main"} · depth {frame?.callDepth ?? 0}
-                        </p>
-                        <small>STACK</small>
-                        <p>
-                          {frame?.stack.length ? (
-                            frame.stack.map((value, index) => (
-                              <code key={index}>{String(value)}</code>
-                            ))
-                          ) : (
-                            <i>empty</i>
-                          )}
-                        </p>
-                        <small>VARIABLES</small>
-                        <p>
-                          {Object.entries(frame?.variables ?? {}).map(([name, value]) => (
-                            <span key={name}>
-                              <code>{name}</code> = {String(value)}
-                            </span>
-                          ))}
-                        </p>
-                        <small>OUTPUT</small>
-                        <p className="output-box">
-                          {result.runtime?.output.slice(0, frame?.outputLength ?? 0).join("\n") ||
-                            "No output yet"}
-                        </p>
+                      <div className="vm-instruction">
+                        <InstructionDiagram instruction={frame?.instruction} />
+                        <details className="raw-instruction">
+                          <summary>Inspect raw VM instruction</summary>
+                          <CodeList
+                            title={`PC ${frame?.pc ?? 0} · current instruction`}
+                            lines={[frame ? JSON.stringify(frame.instruction) : "—"]}
+                          />
+                        </details>
+                      </div>
+                      <div className="vm-details">
+                        <div className="vm-state">
+                          <h3>VM state after instruction</h3>
+                          <small>CALL FRAME</small>
+                          <p>
+                            {frame?.functionName ?? "main"} · depth {frame?.callDepth ?? 0}
+                          </p>
+                          <small>STACK</small>
+                          <p>
+                            {frame?.stack.length ? (
+                              frame.stack.map((value, index) => (
+                                <code key={index}>{String(value)}</code>
+                              ))
+                            ) : (
+                              <i>empty</i>
+                            )}
+                          </p>
+                          <small>VARIABLES</small>
+                          <p>
+                            {Object.entries(frame?.variables ?? {}).map(([name, value]) => (
+                              <span key={name}>
+                                <code>{name}</code> = {String(value)}
+                              </span>
+                            ))}
+                          </p>
+                        </div>
+                        <div className="vm-output">
+                          <h3>Program output</h3>
+                          <p className="output-box">
+                            {result.runtime?.output.slice(0, frame?.outputLength ?? 0).join("\n") ||
+                              "No output yet"}
+                          </p>
+                        </div>
                       </div>
                     </div>
                   </>
@@ -812,7 +920,10 @@ export default function App() {
                       <button
                         type="button"
                         className="primary"
-                        onClick={() => setRunRequested(true)}
+                        onClick={() => {
+                          setAutoAdvance(false);
+                          setRunRequested(true);
+                        }}
                       >
                         ▶ Run VM
                       </button>
@@ -880,16 +991,18 @@ export default function App() {
             className="documentation-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="GujLang documentation"
+            aria-labelledby="documentation-title"
+            onKeyDown={(event) => handleModalKeyDown(event, () => setShowDocumentation(false))}
           >
             <header className="documentation-header">
               <div>
                 <span className="eyebrow">GUJLANG · V2 REFERENCE</span>
-                <h2>Documentation</h2>
+                <h2 id="documentation-title">Documentation</h2>
               </div>
               <button
                 type="button"
                 className="modal-close documentation-close"
+                ref={documentationClose}
                 onClick={() => setShowDocumentation(false)}
                 aria-label="Close documentation"
               >
@@ -900,6 +1013,7 @@ export default function App() {
               <button
                 type="button"
                 className={activeGuide === "language" ? "active" : ""}
+                aria-pressed={activeGuide === "language"}
                 onClick={() => setActiveGuide("language")}
               >
                 Language guide
@@ -907,6 +1021,7 @@ export default function App() {
               <button
                 type="button"
                 className={activeGuide === "compiler" ? "active" : ""}
+                aria-pressed={activeGuide === "compiler"}
                 onClick={() => setActiveGuide("compiler")}
               >
                 Compiler guide
@@ -981,7 +1096,9 @@ bas`}</pre>
                           recursively.
                         </li>
                         <li>
-                          Strings are accepted only as direct <code>bolo</code> arguments.
+                          Strings and <code>+</code> concatenation are allowed only in{" "}
+                          <code>bolo</code> statements, such as <code>bolo "total = " + total</code>
+                          .
                         </li>
                       </ul>
                     </article>
@@ -1010,6 +1127,22 @@ bolo valid`}</pre>
                         comparisons, and boolean operators. Comments start with <code>#</code> or
                         <code>{"//"}</code> and continue to the end of the line.
                       </p>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">EDITOR SHORTCUTS</span>
+                      <ul>
+                        <li>
+                          <code>Tab</code> adds one two-space indentation level to the selected
+                          lines.
+                        </li>
+                        <li>
+                          <code>Shift+Tab</code> removes one indentation level.
+                        </li>
+                        <li>
+                          Press <code>Enter</code> to continue indentation. A line after{" "}
+                          <code>kar</code> indents; <code>bas</code> dedents.
+                        </li>
+                      </ul>
                     </article>
                     <article className="documentation-card">
                       <span className="demo-label">OPERATOR PRECEDENCE · LOW TO HIGH</span>
@@ -1214,13 +1347,20 @@ bolo valid`}</pre>
             className="keyword-modal"
             role="dialog"
             aria-modal="true"
-            aria-label="GujLang keyword guide"
+            aria-labelledby="keyword-guide-title"
+            onKeyDown={(event) => handleModalKeyDown(event, () => setShowKeywords(false))}
           >
-            <button type="button" className="modal-close" onClick={() => setShowKeywords(false)}>
+            <button
+              type="button"
+              className="modal-close"
+              ref={keywordClose}
+              onClick={() => setShowKeywords(false)}
+              aria-label="Close keyword guide"
+            >
               ×
             </button>
             <span className="eyebrow">QUICK REFERENCE</span>
-            <h2>Keyword guide</h2>
+            <h2 id="keyword-guide-title">Keyword guide</h2>
             <p>English aliases and GujLang spellings map to the same compiler tokens.</p>
             <table>
               <thead>
@@ -1282,6 +1422,96 @@ function CodeList({
     </div>
   );
 }
+
+function InstructionDiagram({ instruction }: { instruction?: Instruction }) {
+  if (!instruction) return null;
+  let title = "Instruction";
+  let flow: string[] = [];
+  let explanation = "This VM operation updates the execution state.";
+  switch (instruction.op) {
+    case "CONST":
+      title = "Push a constant";
+      flow = [JSON.stringify(instruction.value), "stack"];
+      explanation = `Push ${JSON.stringify(instruction.value)} onto the VM stack.`;
+      break;
+    case "LOAD":
+      title = "Read a variable";
+      flow = [instruction.name, "stack"];
+      explanation = `Read ${instruction.name} and push its value onto the VM stack.`;
+      break;
+    case "STORE":
+      title = "Write a variable";
+      flow = ["stack top", instruction.name];
+      explanation = `Pop the stack top and store it in ${instruction.name}.`;
+      break;
+    case "UNARY":
+      title = "Apply a unary operator";
+      flow = ["stack top", instruction.operator, "result on stack"];
+      explanation = `Pop one value, apply ${instruction.operator}, and push the result.`;
+      break;
+    case "BINARY":
+      title = "Apply a binary operator";
+      flow = ["left value", instruction.operator, "right value", "result on stack"];
+      explanation = `Pop two values, apply ${instruction.operator}, and push the result.`;
+      break;
+    case "PRINT":
+      title = "Print a value";
+      flow = ["stack top", "program output"];
+      explanation = "Pop the stack top and append it to the program output.";
+      break;
+    case "POP":
+      title = "Discard a value";
+      flow = ["stack top", "discarded"];
+      explanation = "Remove the unused function result from the stack.";
+      break;
+    case "JUMP":
+      title = "Jump to an instruction";
+      flow = [`PC ${instruction.target}`];
+      explanation = `Continue execution at instruction ${instruction.target}.`;
+      break;
+    case "JUMP_IF_FALSE":
+      title = "Branch on a condition";
+      flow = ["condition", `false → PC ${instruction.target}`];
+      explanation = `Pop the condition; if false, continue at instruction ${instruction.target}.`;
+      break;
+    case "CALL":
+      title = "Call a function";
+      flow = [`${instruction.name} · ${instruction.argumentCount} args`, "return value on stack"];
+      explanation = `Enter ${instruction.name}; its returned value is pushed onto the stack.`;
+      break;
+    case "RETURN":
+      title = "Return to the caller";
+      flow = ["stack top", "caller"];
+      explanation = "Pop the return value and resume after the function call.";
+      break;
+    case "FUNCTION":
+      title = "Function entry";
+      flow = [instruction.name, ...instruction.parameters];
+      explanation = "Bind the call arguments to this function’s parameters.";
+      break;
+    case "HALT":
+      title = "Stop execution";
+      flow = ["program", "halted"];
+      explanation = "Stop the virtual machine.";
+      break;
+  }
+  return (
+    <article className="instruction-diagram" aria-label={`Instruction effect: ${explanation}`}>
+      <span className="demo-label">VM OPERATION</span>
+      <h3>{title}</h3>
+      <div className="instruction-flow">
+        {flow.map((part, index) => (
+          <span className="instruction-flow-item" key={`${part}-${index}`}>
+            {index > 0 && <b aria-hidden="true">→</b>}
+            <code>{part}</code>
+          </span>
+        ))}
+      </div>
+      <p>{explanation}</p>
+    </article>
+  );
+}
+
 function EmptyState({ text }: { text: string }) {
   return (
     <div className="empty-state">

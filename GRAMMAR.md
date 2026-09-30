@@ -27,7 +27,8 @@ string literals are free-form and are not translated.
 | true / false | `true` / `false` | `sacu` / `khotu` |
 | and / or / not | `and` / `or` / `not` | `ane` / `athva` / `nathi` |
 
-Comments start with `#` or `//` and continue to end of line. Keywords are case-sensitive.
+Comments start with `#` or `//` and continue to end of line. Keywords are matched
+case-insensitively; identifiers retain their original spelling and case.
 
 ## 3. EBNF
 
@@ -44,7 +45,7 @@ assign_stmt     := IDENT '=' expr
 if_stmt         := ('jo' | 'if') expr ('to' | 'then') block (('nahi to' | 'else') block)?
 while_stmt      := ('jyare' | 'while') expr block
 block           := ('kar' | 'do') stmt* ('bas' | 'end')
-print_stmt      := ('bolo' | 'print') (expr | STRING)
+print_stmt      := ('bolo' | 'print') expr
 return_stmt     := ('pachu aap' | 'return') expr
 break_stmt      := 'rokay' | 'break'
 continue_stmt   := 'aagad' | 'continue'
@@ -57,7 +58,7 @@ comparison      := add_expr (REL_OP add_expr)?
 add_expr        := mul_expr (('+' | '-') mul_expr)*
 mul_expr        := unary_expr (('*' | '/') unary_expr)*
 unary_expr      := '-' unary_expr | primary
-primary         := NUMBER | 'sacu' | 'khotu' | call | IDENT | '(' expr ')'
+primary         := NUMBER | STRING | 'sacu' | 'khotu' | call | IDENT | '(' expr ')'
 call            := IDENT '(' arguments? ')'
 arguments       := expr (',' expr)*
 REL_OP          := '>' | '<' | '>=' | '<=' | '==' | '!='
@@ -67,9 +68,12 @@ Function declarations are collected before body analysis, so functions can call 
 and themselves regardless of declaration order. Each function has its own flat local
 environment; top-level statements have a separate flat global environment.
 
-Strings are accepted only directly by `bolo`; they are not expression primaries, arguments,
-variables, or return values. Every `kar` opens exactly one block and every block has its own
-`bas`. Blocks after `jo`, `nahi to`, and `jyare` follow the same rule. A function body is
+String literals are expression primaries so `bolo "value = " + x` can concatenate text with
+an integer, float, boolean, or another string. The `+` operator concatenates when either operand
+is a string; non-string `+` remains numeric addition. String literals and concatenations are
+valid only in print statements: strings cannot be stored in variables, passed to functions, used
+as conditions, compared, or returned. Every `kar` opens exactly one block and every block has its
+own `bas`. Blocks after `jo`, `nahi to`, and `jyare` follow the same rule. A function body is
 also exactly one such block.
 
 ## 4. Precedence (low to high)
@@ -84,9 +88,10 @@ also exactly one such block.
 
 ## 5. Static semantics
 
-- Types are `int`, `float`, and `bool`. Declarations infer a fixed type from their initializer.
+- Variable and function types are `int`, `float`, and `bool`. Declarations infer a fixed type from their initializer.
 - Numeric operands can mix; arithmetic involving `/` or a float produces `float`, while comparisons produce `bool`.
 - Conditions require `bool`. Equality requires matching types; relational operators require numbers.
+- In print expressions, `+` concatenates string and printable scalar values (int, float, bool, and string); all other arithmetic remains numeric. A string-bearing expression is rejected outside a print statement.
 - Function parameters and returns use the same three types. Calls are expressions and are
   checked for declared name, argument count, and argument types before code generation.
 - Calls pass values by value. Recursion is supported; execution uses a VM-managed call stack

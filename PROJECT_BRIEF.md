@@ -35,7 +35,9 @@ returns, per-call local frames, recursion, and nearest-loop `rokay`/`aagad` cont
 The entire pipeline is paired with a browser-based visualizer that shows each compilation
 phase step by step — with source-position highlighting, an evolving symbol table, TAC
 control-flow labels, and before/after optimization diffs, not just final outputs — plus a
-demo-program loader for quick, repeatable presentation.
+dedicated output panel, an explanation of each current VM instruction, and a demo-program
+loader for quick, repeatable presentation. Print statements can concatenate quoted text
+with variable values, for example `bolo "total = " + total`.
 
 ## Novelty
 Rather than implementing the standard pipeline against a generic English-keyword toy

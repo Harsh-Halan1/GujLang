@@ -536,5 +536,31 @@ need one. The pseudo-assembly allocator’s return-flow analysis was narrowed to
 the relevant function.
 
 **Verification performed:** `bun install --frozen-lockfile`, `bun run test` (production build
-plus smoke suite), and `bun run lint`. Re-run their final status after this report was updated;
-the offline/network-isolated deployment check remains a separate release verification.
+plus smoke suite), and `bun run lint` passed in the prior review. The development setup was
+subsequently checked manually in browser offline mode after reload and a simple program ran
+successfully (user-reported). This does not certify the built production bundle under offline
+hosting; that remains a separate release verification.
+
+## 9. Follow-up quality pass
+
+- Expanded smoke coverage for mutual recursion, wrong function arity and types, recursion depth,
+  register spilling, loop-only declarations, optimization toggles, keyword casing, and semantic
+  Gujlish diagnostic text.
+- Corrected the grammar’s keyword-casing statement to match the lexer. The project description and
+  README now record the development-server offline check and distinguish it from production
+  hosting verification.
+- Added keyboard-visible focus, named VM slider and dialogs, active phase status, Escape dismissal,
+  focus containment, and focus return when dialogs close. These are code-level improvements; a
+  screen-reader audit has not been performed.
+- Replaced the semantic analyzer’s `Arth: <English text>` placeholder with Gujlish messages for
+  its diagnostics.
+- Added print-scoped string concatenation for messages such as `bolo "total = " + total`.
+  Strings still cannot be stored or compared; smoke checks cover numeric and boolean formatting,
+  optimizer behavior, and rejection outside print statements.
+- Updated the Run layout so the current instruction and VM state align, while program output
+  occupies a separate panel below the VM state.
+
+**Remaining release verification:** load the built static bundle from its intended hosting setup
+with the network disconnected, then manually verify the interface in the supported browser engines
+and with a screen reader. No hosted deployment target or cross-browser automation is configured
+in this repository.

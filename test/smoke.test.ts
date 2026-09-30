@@ -34,6 +34,36 @@ if total == 14 then do
   print total
 end`);
 assert(mixed.runtime?.output[0] === "14", "English keyword aliases and precedence work");
+const mixedCase = compile("RAKH Total = 9\nBOLO Total");
+assert(mixedCase.runtime?.output[0] === "9", "keyword matching is case-insensitive");
+const stringOutput = compile(`rakh total = 42
+bolo "total = " + total + "!"
+print "answer: " + (1 + 2)
+bolo "ready: " + sacu`);
+assert(
+  !stringOutput.diagnostics.length,
+  "print supports strings, values, and string concatenation",
+);
+assert(
+  JSON.stringify(stringOutput.runtime?.output) ===
+    JSON.stringify(["total = 42!", "answer: 3", "ready: true"]),
+  "string concatenation formats numeric and boolean values in output",
+);
+const storedString = compile('rakh message = "hello"');
+assert(
+  storedString.diagnostics.some((diagnostic) => diagnostic.code === "S023"),
+  "string expressions remain restricted to print statements",
+);
+const comparedString = compile('bolo "hello" == "hello"');
+assert(
+  comparedString.diagnostics.some((diagnostic) => diagnostic.code === "S006"),
+  "string comparisons remain unsupported",
+);
+const identifierCase = compile("rakh Total = 9\nbolo total");
+assert(
+  identifierCase.diagnostics.some((d) => d.code === "S001"),
+  "identifier matching remains case-sensitive",
+);
 const mixedFixture = compile(readFileSync("samples/mixed-keywords.guj", "utf8"));
 assert(mixedFixture.runtime?.output[0] === "14", "mixed keyword fixture runs");
 
@@ -70,6 +100,12 @@ ready = 3`);
 assert(
   invalid.diagnostics.some((d) => d.code === "S009"),
   "static assignment type error is rejected",
+);
+assert(
+  invalid.diagnostics.every(
+    (d) => d.gujlangMessage.length > 0 && !d.gujlangMessage.startsWith("Arth:"),
+  ),
+  "type diagnostics include a Gujlish translation instead of repeating English",
 );
 assert(!invalid.bytecode, "invalid source does not reach code generation");
 const invalidFixture = compile(readFileSync("samples/invalid-type.guj", "utf8"));
@@ -122,6 +158,52 @@ assert(
   "function parameters participate in register allocation",
 );
 
+const mutualRecursion = compile(`kaam even(n: int) -> bool kar
+  jo n == 0 to kar
+    pachu aap sacu
+  bas
+  pachu aap odd(n - 1)
+bas
+kaam odd(n: int) -> bool kar
+  jo n == 0 to kar
+    pachu aap khotu
+  bas
+  pachu aap even(n - 1)
+bas
+bolo even(8)`);
+assert(
+  mutualRecursion.runtime?.output[0] === "true",
+  "mutually recursive functions resolve across declarations",
+);
+
+const callArity = compile(`kaam one(n: int) -> int kar
+  pachu aap n
+bas
+bolo one()`);
+assert(
+  callArity.diagnostics.some((d) => d.code === "S013"),
+  "wrong function arity is rejected",
+);
+assert(!callArity.bytecode, "arity errors block code generation");
+
+const callType = compile(`kaam one(n: int) -> int kar
+  pachu aap n
+bas
+bolo one(sacu)`);
+assert(
+  callType.diagnostics.some((d) => d.code === "S014"),
+  "function argument types are checked",
+);
+
+const callDepth = compile(`kaam forever(n: int) -> int kar
+  pachu aap forever(n + 1)
+bas
+bolo forever(0)`);
+assert(
+  callDepth.diagnostics.some((d) => d.phase === "runtime" && d.message.includes("call depth")),
+  "recursive call depth limit halts safely",
+);
+
 const callStatement = compile(`kaam announce() -> int kar
   bolo "called"
   pachu aap 0
@@ -159,6 +241,15 @@ assert(
   "conditional declarations cannot be read on paths where they did not execute",
 );
 
+const loopOnlyDeclaration = compile(`jyare khotu kar
+  rakh once = 1
+bas
+bolo once`);
+assert(
+  loopOnlyDeclaration.diagnostics.some((d) => d.code === "S022"),
+  "loop-only declaration is not assumed initialized",
+);
+
 const deadAfterReturn = compile(`kaam value() -> int kar
   pachu aap 1
   bolo "unreachable"
@@ -168,6 +259,33 @@ bolo result`);
 assert(
   !(deadAfterReturn.tac ?? []).some((line) => line.includes("unreachable")),
   "DCE removes unreachable instructions after a return",
+);
+const noDce = compile(
+  `kaam value() -> int kar
+  pachu aap 1
+  bolo "unreachable"
+bas
+rakh result = value()
+bolo result`,
+  { optimizations: { constantFolding: true, deadCodeElimination: false } },
+);
+assert(
+  (noDce.tac ?? []).some((line) => line.includes("unreachable")),
+  "disabling DCE preserves original unreachable TAC for comparison",
+);
+
+const spill = compile("bolo (1 + 2) * (3 + 4)", {
+  registerCount: 0,
+  optimizations: { constantFolding: false, deadCodeElimination: false },
+});
+assert(
+  (spill.registerAllocation?.spills.length ?? 0) > 0,
+  "register pressure is reported as spills",
+);
+assert(
+  spill.registerAllocation?.assembly.some((line) => line.startsWith("LOAD R_TMP")) &&
+    spill.registerAllocation.assembly.some((line) => line.startsWith("STORE [spill:")),
+  "spilled operands are moved through scratch registers",
 );
 
 const shortCircuitSyntax = compile("bolo 2 * nathi sacu");

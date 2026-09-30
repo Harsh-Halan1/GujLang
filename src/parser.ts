@@ -109,12 +109,7 @@ export function parse(tokens: Token[]): {
       return { kind: "assign", name: String(id.value), value, span: join(start.span, value.span) };
     }
     if (match("PRINT")) {
-      const value = at("STRING")
-        ? (() => {
-            const t = take();
-            return { kind: "string", value: String(t.value), span: t.span } as Expr;
-          })()
-        : expression();
+      const value = expression();
       return { kind: "print", value, span: join(start.span, value.span) };
     }
     if (match("RETURN")) {
@@ -190,6 +185,7 @@ export function parse(tokens: Token[]): {
         numericKind: t.type === "INT" ? "int" : "float",
         span: t.span,
       };
+    if (t.type === "STRING") return { kind: "string", value: String(t.value), span: t.span };
     if (t.type === "TRUE" || t.type === "FALSE")
       return { kind: "boolean", value: t.type === "TRUE", span: t.span };
     if (t.type === "IDENT") {

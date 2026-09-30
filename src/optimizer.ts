@@ -179,10 +179,12 @@ function evaluate(
   op: string,
   a: number | boolean | string,
   b: number | boolean | string,
-): number | boolean | undefined {
+): number | boolean | string | undefined {
   switch (op) {
     case "+":
-      return (a as number) + (b as number);
+      return typeof a === "string" || typeof b === "string"
+        ? String(a) + String(b)
+        : (a as number) + (b as number);
     case "-":
       return (a as number) - (b as number);
     case "*":

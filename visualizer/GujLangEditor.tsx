@@ -1,6 +1,12 @@
 import { closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { HighlightStyle, StreamLanguage, syntaxHighlighting } from "@codemirror/language";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import {
+  HighlightStyle,
+  indentString,
+  indentUnit,
+  StreamLanguage,
+  syntaxHighlighting,
+} from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import {
   drawSelection,
@@ -61,10 +67,60 @@ const syntaxStyle = syntaxHighlighting(
 
 type GujLangStreamState = { line: string | null; tokens: Token[]; nextToken: number };
 
+function indentationForLine(doc: EditorState["doc"], lineStart: number): number {
+  const closerPattern = /^(?:bas|end)\b/iu;
+  const openerPattern = /\b(?:kar|do)\s*$/iu;
+  let depth = 0;
+  for (let pos = lineStart - 1; pos >= 0; ) {
+    const line = doc.lineAt(pos);
+    const code = line.text.replace(/(?:#|\/\/).*$/, "").trim();
+    if (closerPattern.test(code)) depth++;
+    else if (openerPattern.test(code)) {
+      if (depth === 0) return /^\s*/.exec(line.text)?.[0].length ?? 0;
+      depth--;
+    }
+    if (line.from === 0) break;
+    pos = line.from - 1;
+  }
+  return 0;
+}
+
 const gujLang = StreamLanguage.define<GujLangStreamState>({
   name: "GujLang",
-  languageData: { indentOnInput: /^\s*(?:bas|end)\b/iu },
+  languageData: {},
   startState: () => ({ line: null, tokens: [], nextToken: 0 }),
+  indent(_state, textAfter, context) {
+    const current = context.lineAt(context.state.selection.main.head);
+    const currentCode = current.text.replace(/(?:#|\/\/).*$/, "").trim();
+    const closer = /^(?:bas|end|else|nahi\s+to)\b/iu.test(currentCode || textAfter.trimStart());
+    const matchCloser = (line: string) => /^(?:bas|end)\b/iu.test(line);
+    const matchOpener = (line: string) => /\b(?:kar|do)\s*$/iu.test(line);
+    let depth = 0;
+
+    for (let pos = current.from - 1; pos >= 0; ) {
+      const line = context.lineAt(pos);
+      const code = line.text.replace(/(?:#|\/\/).*$/, "").trim();
+      if (matchCloser(code)) depth++;
+      else if (matchOpener(code)) {
+        if (depth === 0) {
+          const baseIndent = context.lineIndent(line.from);
+          return closer ? baseIndent : baseIndent + context.unit;
+        }
+        depth--;
+      }
+      if (line.from === 0) break;
+      pos = line.from - 1;
+    }
+
+    let previous = context.lineAt(Math.max(0, current.from - 1));
+    while (!previous.text.trim() && previous.from > 0) previous = context.lineAt(previous.from - 1);
+    const previousCode = previous.text.replace(/(?:#|\/\/).*$/, "").trim();
+    const indentation = context.lineIndent(previous.from);
+    if (matchOpener(previousCode)) return indentation + context.unit;
+    if (matchCloser(currentCode || textAfter.trimStart()))
+      return Math.max(0, indentation - context.unit);
+    return indentation;
+  },
   token(stream, state) {
     if (stream.sol()) {
       state.line = stream.string;
@@ -134,8 +190,27 @@ export function GujLangEditor({
         drawSelection(),
         EditorState.allowMultipleSelections.of(true),
         closeBrackets(),
+        EditorState.transactionFilter.of((transaction) => {
+          if (!transaction.docChanged || !transaction.isUserEvent("input.type")) return transaction;
+          const { head } = transaction.newSelection.main;
+          const line = transaction.newDoc.lineAt(head);
+          const typedLine = line.text.slice(0, head - line.from).trim();
+          if (!/^(?:bas|end|else|nahi\s+to)$/iu.test(typedLine)) return transaction;
+          const baseIndent = indentationForLine(transaction.newDoc, line.from);
+          const indent = indentString(transaction.startState, baseIndent);
+          const currentIndent = /^\s*/.exec(line.text)?.[0] ?? "";
+          if (currentIndent === indent) return transaction;
+          return [
+            transaction,
+            {
+              changes: { from: line.from, to: line.from + currentIndent.length, insert: indent },
+              sequential: true,
+            },
+          ];
+        }),
         highlightActiveLine(),
-        keymap.of([...closeBracketsKeymap, ...defaultKeymap, ...historyKeymap]),
+        indentUnit.of("  "),
+        keymap.of([...closeBracketsKeymap, indentWithTab, ...defaultKeymap, ...historyKeymap]),
         gujLang,
         syntaxStyle,
         editorTheme,

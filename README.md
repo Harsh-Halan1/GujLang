@@ -7,7 +7,7 @@ Principles of Compiler Design (4CS501CC25) innovative assignment at Nirma Univer
 ```
 rakh x = 5
 jo x > 3 to kar
-    bolo "moto che"
+    bolo "value = " + x
 bas
 nahi to kar
     bolo "nano che"
@@ -29,6 +29,10 @@ bas
 - 🖥️ **Interactive visualizer** — step through tokens (with source highlighting),
   parse tree, evolving symbol table, TAC with control-flow labels, before/after
   optimization diffs, and VM execution
+- ⌨️ **Editor shortcuts** — press Tab to indent by two spaces, Shift+Tab to outdent,
+  and Enter to continue the current block indentation
+- 🧵 **Readable output strings** — combine quoted text with variable values in `bolo` / `print`,
+  for example `bolo "total = " + total`
 - ▶️ **Run button** — executes the compiled stack-VM output in-browser, with a hard
   instruction cap so an infinite loop halts cleanly instead of freezing the tab
 - 🎛️ **Toggleable optimizations** — switch constant folding / dead code elimination
@@ -95,8 +99,20 @@ bun run dev      # start the browser visualizer at localhost
 bun run cli samples/branching.guj  # run a sample through the CLI
 bun run build:core
 bun run start samples/branching.guj # run a compiled CLI build
-bun run build   # production build — verify it works fully offline before demoing
+bun run build   # create the static production bundle
 ```
+
+## Browser, accessibility, and offline notes
+
+The visualizer targets current evergreen versions of Chrome, Edge, Firefox, and Safari. `bun run
+test` builds the production bundle and runs compiler smoke checks; it does not launch a browser or
+exercise the bundle in each engine. Cross-browser manual verification is not currently automated.
+Keyboard focus indicators, labelled controls, and keyboard dismissal of documentation dialogs are
+supported. In Run, **Final step** jumps directly to the completed output and **Auto step** advances
+the VM trace for you; program output is shown in its own panel beneath VM state. A manual offline check in the development setup passed:
+after loading the app, the browser was switched to offline mode, the page reloaded, and a simple
+program still ran. This confirms that check in the development setup; it does not certify every
+production hosting configuration or browser/screen-reader combination.
 
 ## Team
 
