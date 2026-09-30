@@ -15,7 +15,7 @@
 
 ## Brief Description
 We are building a complete compiler for a small toy imperative language (declarations,
-expressions, `if`/`else`, `while`, `print`) whose **keyword layer** is localized into
+expressions, `if`/`else`, `while`, `print`, and typed functions with parameters and returns) whose **keyword layer** is localized into
 "GujLang" — Gujarati words spelled phonetically in place of standard English keywords
 (e.g. `jo` for `if`, `jyare` for `while`, `bolo` for `print`). Identifiers and string
 literals remain free-form/untranslated; the localization is specifically the keywords
@@ -28,7 +28,8 @@ single, table-driven lexer. Error messages are emitted bilingually, using GujLan
 alongside the standard message. Code generation targets two backends: an executable
 stack-VM (used for live demos) and a register-allocated pseudo-assembly form using graph
 coloring, so the syllabus's register-allocation outcome has a concrete artifact even
-though the VM itself doesn't use registers.
+though the VM itself doesn't use registers. Functions support value parameters, typed
+returns, per-call local frames, and recursion; `rokay`/`aagad` remain reserved.
 
 The entire pipeline is paired with a browser-based visualizer that shows each compilation
 phase step by step — with source-position highlighting, an evolving symbol table, TAC

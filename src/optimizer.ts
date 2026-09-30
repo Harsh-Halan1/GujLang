@@ -13,7 +13,9 @@ export function optimize(
     const constants = new Map<string, number | boolean | string>();
     const folded: TacInstruction[] = [];
     for (const instruction of code) {
-      if (instruction.op === "label" || instruction.op === "goto" || instruction.op === "ifFalse")
+      if (
+        ["label", "goto", "ifFalse", "call", "function", "return", "halt"].includes(instruction.op)
+      )
         constants.clear();
       if (instruction.op === "const") constants.set(instruction.target, instruction.value);
       else if (instruction.op === "copy") {
@@ -75,9 +77,11 @@ export function optimize(
                 ? [i + 1, labels.get(instruction.target)].filter(
                     (n): n is number => n !== undefined,
                   )
-                : i + 1 < code.length
-                  ? [i + 1]
-                  : [];
+                : instruction.op === "return" || instruction.op === "halt"
+                  ? []
+                  : i + 1 < code.length
+                    ? [i + 1]
+                    : [];
           const next = new Set(successors.flatMap((index) => [...liveIn[index]]));
           const definition = defines(instruction),
             uses = used(instruction);
@@ -147,7 +151,7 @@ function evaluate(
   }
 }
 function defines(ins: TacInstruction): string | undefined {
-  return ["const", "copy", "unary", "binary"].includes(ins.op)
+  return ["const", "copy", "unary", "binary", "call"].includes(ins.op)
     ? (ins as { target: string }).target
     : undefined;
 }
@@ -157,6 +161,8 @@ function used(ins: TacInstruction): string[] {
   if (ins.op === "binary") return [ins.left, ins.right];
   if (ins.op === "print") return [ins.value];
   if (ins.op === "ifFalse") return [ins.condition];
+  if (ins.op === "call") return ins.args;
+  if (ins.op === "return") return [ins.value];
   return [];
 }
 function same(a: Set<string>, b: Set<string>): boolean {

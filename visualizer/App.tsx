@@ -33,9 +33,9 @@ const demos: Demo[] = [
     description: "Inspect parser recovery and semantic diagnostics.",
   },
   {
-    title: "Reserved feature",
-    source: `kaam greet\npachu aap 1`,
-    description: "Reserved words are recognized but not implemented in v1.",
+    title: "Recursive function",
+    source: `kaam factorial(n: int) -> int kar\n  jo n <= 1 to kar\n    pachu aap 1\n  bas\n  pachu aap n * factorial(n - 1)\nbas\nrakh answer = factorial(5)\nbolo answer`,
+    description: "A recursive function with typed parameters, branching, and a return value.",
   },
 ];
 const keywordRows = [
@@ -46,7 +46,7 @@ const keywordRows = [
   ["print", "bolo"],
   ["true / false", "sacu / khotu"],
   ["and / or / not", "ane / athva / nathi"],
-  ["function / return", "kaam / pachu aap · reserved"],
+  ["function / return", "kaam / pachu aap"],
   ["break / continue", "rokay / aagad · reserved"],
 ];
 
@@ -56,6 +56,7 @@ const ruleFor = (statement: Stmt) =>
     declare: "decl_stmt := 'rakh' IDENT '=' expr",
     assign: "assign_stmt := IDENT '=' expr",
     print: "print_stmt := 'bolo' (expr | STRING)",
+    return: "return_stmt := 'pachu aap' expr",
     if: "if_stmt := 'jo' expr 'to' block ('nahi' 'to' block)?",
     while: "while_stmt := 'jyare' expr block",
   })[statement.kind];
@@ -63,21 +64,29 @@ function AstNode({ value }: { value: unknown }) {
   if (!value || typeof value !== "object") return <span>{String(value)}</span>;
   const node = value as Record<string, unknown>;
   const title =
-    node.kind === "program"
-      ? "program := stmt_list EOF"
-      : node.kind === "binary"
-        ? "expr := expr operator expr"
-        : node.kind === "unary"
-          ? "unary_expr := operator expr"
-          : node.kind === "variable"
-            ? "primary := IDENT"
-            : node.kind === "number"
-              ? "primary := NUMBER"
-              : node.kind === "boolean"
-                ? "primary := boolean literal"
-                : node.kind === "string"
-                  ? "STRING (valid directly after bolo)"
-                  : (ruleFor(node as unknown as Stmt) ?? String(node.kind));
+    node.kind === "module"
+      ? "module := top_level* EOF"
+      : node.kind === "function"
+        ? "function_decl := 'kaam' IDENT '(' parameters ')' '->' type block"
+        : node.kind === "call"
+          ? "call := IDENT '(' arguments? ')'"
+          : node.kind === "return"
+            ? "return_stmt := 'pachu aap' expr"
+            : node.kind === "program"
+              ? "program := stmt_list EOF"
+              : node.kind === "binary"
+                ? "expr := expr operator expr"
+                : node.kind === "unary"
+                  ? "unary_expr := operator expr"
+                  : node.kind === "variable"
+                    ? "primary := IDENT"
+                    : node.kind === "number"
+                      ? "primary := NUMBER"
+                      : node.kind === "boolean"
+                        ? "primary := boolean literal"
+                        : node.kind === "string"
+                          ? "STRING (valid directly after bolo)"
+                          : (ruleFor(node as unknown as Stmt) ?? String(node.kind));
   return (
     <details className="ast-node" open title={title}>
       <summary>
@@ -283,7 +292,7 @@ export default function App() {
       </header>
       <section className="hero">
         <div>
-          <p className="eyebrow">PRINCIPLES OF COMPILER DESIGN · V1 CORE</p>
+          <p className="eyebrow">PRINCIPLES OF COMPILER DESIGN · V2</p>
           <h1>
             See how your program
             <br />
@@ -316,7 +325,7 @@ export default function App() {
               <span className="section-index">01</span>
               <strong>Source program</strong>
             </div>
-            <span className="language-pill">GUJLANG · V1</span>
+            <span className="language-pill">GUJLANG · V2</span>
           </div>
           <div className="editor-wrap">
             <Suspense fallback={<div className="editor-loading">Loading code editor…</div>}>
@@ -456,7 +465,8 @@ export default function App() {
                   </div>
                   {result.program && (
                     <span className="count-pill">
-                      {result.program.statements.length} top-level statements
+                      {result.functions?.length ?? 0} functions · {result.program.statements.length}{" "}
+                      top-level statements
                     </span>
                   )}
                 </div>
@@ -465,7 +475,13 @@ export default function App() {
                 </p>
                 {result.program ? (
                   <div className="ast-root">
-                    <AstNode value={result.program} />
+                    <AstNode
+                      value={{
+                        kind: "module",
+                        functions: result.functions ?? [],
+                        program: result.program,
+                      }}
+                    />
                   </div>
                 ) : (
                   <EmptyState text="The parser needs a valid program before an AST can be shown." />
@@ -479,10 +495,10 @@ export default function App() {
                     <span className="eyebrow">PHASE 03</span>
                     <h2>Symbol table history</h2>
                   </div>
-                  <span className="count-pill">Flat global scope</span>
+                  <span className="count-pill">Global + function-local scopes</span>
                 </div>
                 <p className="helper">
-                  Declarations become visible in order and remain visible across blocks.
+                  Declarations become visible in order; functions have separate per-call locals.
                 </p>
                 {history.length ? (
                   <div className="history-list">
@@ -509,6 +525,36 @@ export default function App() {
                   </div>
                 ) : (
                   <EmptyState text="No valid declarations to show yet." />
+                )}
+                {result.symbols.some((symbol) => symbol.role !== "global") && (
+                  <div className="history-list function-symbols">
+                    {[
+                      ...new Set(
+                        result.symbols
+                          .filter((symbol) => symbol.role !== "global")
+                          .map((symbol) => symbol.scope),
+                      ),
+                    ].map((scope) => (
+                      <article key={scope} className="history-step">
+                        <span className="history-index">FN</span>
+                        <div>
+                          <strong>{scope} · local frame</strong>
+                          <div className="symbol-snapshot">
+                            {result.symbols
+                              .filter((symbol) => symbol.scope === scope)
+                              .map((symbol, index) => (
+                                <span key={`${scope}-${symbol.name}-${index}`}>
+                                  <code>{symbol.name}</code>
+                                  <small>
+                                    {symbol.type} · {symbol.role}
+                                  </small>
+                                </span>
+                              ))}
+                          </div>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
                 )}
               </section>
             )}
@@ -659,6 +705,10 @@ export default function App() {
                       />
                       <div className="vm-state">
                         <h3>VM state after instruction</h3>
+                        <small>CALL FRAME</small>
+                        <p>
+                          {frame?.functionName ?? "main"} · depth {frame?.callDepth ?? 0}
+                        </p>
                         <small>STACK</small>
                         <p>
                           {frame?.stack.length ? (
@@ -767,7 +817,7 @@ export default function App() {
           >
             <header className="documentation-header">
               <div>
-                <span className="eyebrow">GUJLANG · V1 REFERENCE</span>
+                <span className="eyebrow">GUJLANG · V2 REFERENCE</span>
                 <h2>Documentation</h2>
               </div>
               <button
@@ -800,7 +850,7 @@ export default function App() {
                 <section className="phase-view documentation-view">
                   <div className="view-title">
                     <div>
-                      <span className="eyebrow">REFERENCE · V1</span>
+                      <span className="eyebrow">REFERENCE · V2</span>
                       <h2>GujLang language guide</h2>
                     </div>
                   </div>
@@ -822,7 +872,7 @@ bolo total`}</pre>
                     <article className="documentation-card">
                       <span className="demo-label">KEYWORDS</span>
                       <div className="guide-pairs">
-                        {keywordRows.slice(0, 7).map(([english, gujlang]) => (
+                        {keywordRows.slice(0, 8).map(([english, gujlang]) => (
                           <div key={english}>
                             <code>{gujlang}</code>
                             <span>{english}</span>
@@ -855,11 +905,31 @@ bas`}</pre>
                         </li>
                         <li>Variable types stay fixed after declaration.</li>
                         <li>Integer and float arithmetic can mix; division produces a float.</li>
-                        <li>Variables use one flat global scope, including inside blocks.</li>
+                        <li>
+                          Top-level variables are global; each function has a separate flat local
+                          scope.
+                        </li>
+                        <li>
+                          Functions use typed parameters, a typed return, and may call themselves
+                          recursively.
+                        </li>
                         <li>
                           Strings are accepted only as direct <code>bolo</code> arguments.
                         </li>
                       </ul>
+                    </article>
+                    <article className="documentation-card">
+                      <span className="demo-label">FUNCTIONS AND RETURNS</span>
+                      <pre>{`kaam add(a: int, b: int) -> int kar
+  pachu aap a + b
+bas
+rakh total = add(2, 3)
+bolo total`}</pre>
+                      <p>
+                        Calls pass values into a fresh local frame. Parameters and local variables
+                        cannot read global variables, and every function path must return the
+                        declared type. Recursive calls are supported.
+                      </p>
                     </article>
                     <article className="documentation-card">
                       <span className="demo-label">EXPRESSIONS AND COMMENTS</span>
@@ -898,11 +968,10 @@ bolo valid`}</pre>
                       </p>
                     </article>
                     <article className="documentation-card">
-                      <span className="demo-label">V1 BOUNDARY</span>
+                      <span className="demo-label">V2 BOUNDARY</span>
                       <p>
-                        Functions (<code>kaam</code>), return (<code>pachu aap</code>), break (
-                        <code>rokay</code>), and continue (<code>aagad</code>) are reserved words,
-                        not implemented features.
+                        <code>rokay</code> and <code>aagad</code> (break and continue) remain
+                        reserved, but are not part of the implemented language yet.
                       </p>
                       <button
                         type="button"
@@ -938,7 +1007,7 @@ bolo valid`}</pre>
                 <section className="phase-view documentation-view">
                   <div className="view-title">
                     <div>
-                      <span className="eyebrow">TEACHING NOTES · V1</span>
+                      <span className="eyebrow">TEACHING NOTES · V2</span>
                       <h2>Compiler and runtime guide</h2>
                     </div>
                   </div>

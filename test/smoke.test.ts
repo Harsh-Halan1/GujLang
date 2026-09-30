@@ -83,15 +83,15 @@ assert(
   "equality follows the documented same-type rule",
 );
 
-const unsupported = compile("kaam greet");
+const unsupported = compile("rokay");
 assert(
-  unsupported.diagnostics.some((d) => d.message.includes("not supported in v1")),
+  unsupported.diagnostics.some((d) => d.message.includes("not supported in v2")),
   "reserved keyword is explicit",
 );
 const unsupportedReturn = compile("pachu aap 1");
 assert(
-  unsupportedReturn.diagnostics.some((d) => d.message.includes("not supported in v1")),
-  "multiword reserved keyword is tokenized as one unsupported construct",
+  unsupportedReturn.diagnostics.some((d) => d.code === "S015"),
+  "return is rejected outside a function",
 );
 
 const notExpression = compile("bolo nathi nathi sacu");

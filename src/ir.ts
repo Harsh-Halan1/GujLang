@@ -1,4 +1,4 @@
-import type { Expr, Program, Stmt } from "./ast";
+import type { Expr, Module, Stmt } from "./ast";
 
 export type Instruction =
   | { op: "CONST"; value: number | boolean | string }
@@ -9,6 +9,9 @@ export type Instruction =
   | { op: "PRINT" }
   | { op: "JUMP"; target: number }
   | { op: "JUMP_IF_FALSE"; target: number }
+  | { op: "FUNCTION"; name: string; parameters: string[] }
+  | { op: "CALL"; name: string; argumentCount: number }
+  | { op: "RETURN" }
   | { op: "HALT" };
 
 export type TacInstruction =
@@ -19,12 +22,17 @@ export type TacInstruction =
   | { op: "print"; value: string }
   | { op: "ifFalse"; condition: string; target: string }
   | { op: "goto"; target: string }
-  | { op: "label"; name: string };
+  | { op: "label"; name: string }
+  | { op: "function"; name: string; parameters: string[] }
+  | { op: "call"; target: string; name: string; args: string[] }
+  | { op: "return"; value: string }
+  | { op: "halt" };
 
-export function generateTac(program: Program): TacInstruction[] {
+export function generateTac(module: Module): TacInstruction[] {
   const out: TacInstruction[] = [];
   let temp = 0;
   let label = 0;
+  let localPrefix = "";
   const fresh = () => `t${++temp}`;
   const freshLabel = () => `L${++label}`;
   const expr = (e: Expr): string => {
@@ -35,7 +43,13 @@ export function generateTac(program: Program): TacInstruction[] {
     }
     if (e.kind === "variable") {
       const target = fresh();
-      out.push({ op: "copy", target, source: e.name });
+      out.push({ op: "copy", target, source: `${localPrefix}${e.name}` });
+      return target;
+    }
+    if (e.kind === "call") {
+      const args = e.arguments.map(expr);
+      const target = fresh();
+      out.push({ op: "call", target, name: e.name, args });
       return target;
     }
     if (e.kind === "unary") {
@@ -55,10 +69,11 @@ export function generateTac(program: Program): TacInstruction[] {
       if (stmt.kind === "declare" || stmt.kind === "assign") {
         out.push({
           op: "copy",
-          target: stmt.name,
+          target: `${localPrefix}${stmt.name}`,
           source: expr(stmt.kind === "declare" ? stmt.initializer : stmt.value),
         });
       } else if (stmt.kind === "print") out.push({ op: "print", value: expr(stmt.value) });
+      else if (stmt.kind === "return") out.push({ op: "return", value: expr(stmt.value) });
       else if (stmt.kind === "if") {
         const condition = expr(stmt.condition),
           otherwise = freshLabel(),
@@ -82,7 +97,17 @@ export function generateTac(program: Program): TacInstruction[] {
       }
     }
   };
-  list(program.statements);
+  list(module.program.statements);
+  out.push({ op: "halt" });
+  for (const fn of module.functions) {
+    localPrefix = `${fn.name}::`;
+    out.push({
+      op: "function",
+      name: fn.name,
+      parameters: fn.parameters.map((parameter) => `${localPrefix}${parameter.name}`),
+    });
+    list(fn.body);
+  }
   return out;
 }
 
@@ -105,19 +130,30 @@ export function formatTac(code: TacInstruction[]): string[] {
         return `goto ${ins.target}`;
       case "label":
         return `${ins.name}:`;
+      case "function":
+        return `function ${ins.name}(${ins.parameters.join(", ")}):`;
+      case "call":
+        return `${ins.target} = call ${ins.name}(${ins.args.join(", ")})`;
+      case "return":
+        return `return ${ins.value}`;
+      case "halt":
+        return "halt";
       default:
         return "";
     }
   });
 }
 
-export function generate(program: Program): Instruction[] {
+export function generate(module: Module): Instruction[] {
   const code: Instruction[] = [];
   const expr = (e: Expr) => {
     if (e.kind === "number" || e.kind === "boolean" || e.kind === "string")
       code.push({ op: "CONST", value: e.value });
     else if (e.kind === "variable") code.push({ op: "LOAD", name: e.name });
-    else if (e.kind === "unary") {
+    else if (e.kind === "call") {
+      for (const arg of e.arguments) expr(arg);
+      code.push({ op: "CALL", name: e.name, argumentCount: e.arguments.length });
+    } else if (e.kind === "unary") {
       expr(e.operand);
       code.push({ op: "UNARY", operator: e.op });
     } else {
@@ -126,8 +162,8 @@ export function generate(program: Program): Instruction[] {
       code.push({ op: "BINARY", operator: e.op });
     }
   };
-  const list = (ss: Stmt[]) => {
-    for (const s of ss) {
+  const list = (statements: Stmt[]) => {
+    for (const s of statements) {
       if (s.kind === "declare") {
         expr(s.initializer);
         code.push({ op: "STORE", name: s.name });
@@ -137,6 +173,9 @@ export function generate(program: Program): Instruction[] {
       } else if (s.kind === "print") {
         expr(s.value);
         code.push({ op: "PRINT" });
+      } else if (s.kind === "return") {
+        expr(s.value);
+        code.push({ op: "RETURN" });
       } else if (s.kind === "if") {
         expr(s.condition);
         const cond = code.push({ op: "JUMP_IF_FALSE", target: -1 }) - 1;
@@ -157,7 +196,15 @@ export function generate(program: Program): Instruction[] {
       }
     }
   };
-  list(program.statements);
+  list(module.program.statements);
   code.push({ op: "HALT" });
+  for (const fn of module.functions) {
+    code.push({
+      op: "FUNCTION",
+      name: fn.name,
+      parameters: fn.parameters.map((parameter) => parameter.name),
+    });
+    list(fn.body);
+  }
   return code;
 }

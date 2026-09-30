@@ -18,14 +18,14 @@ keywords with Gujarati words spelled phonetically (e.g. `jo` for `if`). The scop
 localization is deliberately precise — see Section 3 — rather than a claim that "the
 whole language" is Gujarati.
 
-## 2. Language Overview: GujLang (v1 core)
+## 2. Language Overview: GujLang (v2)
 
-v1 implements a small, complete core: declarations, expressions, `if`/`else`, `while`,
-`print`. Functions, `return`, `break`, and `continue` are **not** part of v1 — their
-keywords are reserved in the lexer but have no grammar or runtime behavior yet, and are
-not presented as working features until fully specified and demoed (see GRAMMAR.md §1).
+V2 includes the complete v1 core plus typed functions, parameters, calls, returns, and
+recursion. Functions use call-by-value and have isolated local frames; they cannot read
+global or caller variables. `rokay`/`aagad` (`break`/`continue`) remain reserved keywords
+without grammar or runtime behavior (see GRAMMAR.md §1).
 
-### 2.1 Keyword table (v1 core)
+### 2.1 Keyword table
 | English keyword | GujLang keyword |
 |---|---|
 | `if` / `then` / `else` | `jo` / `to` / `nahi to` |
@@ -35,6 +35,7 @@ not presented as working features until fully specified and demoed (see GRAMMAR.
 | `print` | `bolo` |
 | `true` / `false` | `sacu` / `khotu` |
 | `and` / `or` / `not` | `ane` / `athva` / `nathi` |
+| `function` / `return` | `kaam` / `pachu aap` |
 
 ### 2.2 Sample program
 ```

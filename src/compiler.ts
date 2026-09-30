@@ -1,4 +1,4 @@
-import type { Program, TypeName } from "./ast";
+import type { FunctionDecl, Program, TypeName } from "./ast";
 import type { Diagnostic } from "./diagnostics";
 import { formatTac, generate, generateTac, type Instruction, type TacInstruction } from "./ir";
 import { lex } from "./lexer";
@@ -10,6 +10,7 @@ import { type RuntimeResult, run } from "./vm";
 
 export type CompileResult = {
   program?: Program;
+  functions?: FunctionDecl[];
   tokens: ReturnType<typeof lex>["tokens"];
   diagnostics: Diagnostic[];
   symbols: SymbolInfo[];
@@ -36,18 +37,19 @@ export function compile(
     parsed = parse(lexed.tokens),
     diagnostics = [...lexed.diagnostics, ...parsed.diagnostics];
   if (diagnostics.length) return { tokens: lexed.tokens, diagnostics, symbols: [] };
-  const checked = analyze(parsed.program);
+  const checked = analyze(parsed.module);
   diagnostics.push(...checked.diagnostics);
   if (diagnostics.length)
     return {
       program: parsed.program,
+      functions: parsed.module.functions,
       tokens: lexed.tokens,
       diagnostics,
       symbols: checked.symbols,
       expressionTypes: checked.expressionTypes,
     };
-  const bytecode = generate(parsed.program);
-  const rawTacInstructions = generateTac(parsed.program);
+  const bytecode = generate(parsed.module);
+  const rawTacInstructions = generateTac(parsed.module);
   const optimized = optimize(
     rawTacInstructions,
     options.optimizations ?? { constantFolding: true, deadCodeElimination: true },
@@ -64,6 +66,7 @@ export function compile(
         });
   return {
     program: parsed.program,
+    functions: parsed.module.functions,
     tokens: lexed.tokens,
     diagnostics: runtime?.diagnostics ?? [],
     symbols: checked.symbols,

@@ -27,6 +27,12 @@ const aliases = new Map<string, string>([
   ["then", "THEN"],
   ["nahi", "NOT_OR_ELSE"],
   ["else", "ELSE"],
+  ["kaam", "FUNCTION"],
+  ["function", "FUNCTION"],
+  ["return", "RETURN"],
+  ["int", "TYPE_INT"],
+  ["float", "TYPE_FLOAT"],
+  ["bool", "TYPE_BOOL"],
   ["jyare", "WHILE"],
   ["while", "WHILE"],
   ["kar", "DO"],
@@ -45,9 +51,6 @@ const aliases = new Map<string, string>([
   ["or", "OR"],
   ["nathi", "NOT"],
   ["not", "NOT"],
-  ["kaam", "UNSUPPORTED"],
-  ["function", "UNSUPPORTED"],
-  ["return", "UNSUPPORTED"],
   ["rokay", "UNSUPPORTED"],
   ["break", "UNSUPPORTED"],
   ["aagad", "UNSUPPORTED"],
@@ -109,7 +112,7 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
         const phrase = /^\s+aap\b/i.exec(source.slice(i))?.[0];
         if (phrase) {
           for (let n = 0; n < phrase.length; n++) advance();
-          emit("keyword", "UNSUPPORTED", start);
+          emit("keyword", "RETURN", start);
           continue;
         }
       }
@@ -121,17 +124,19 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
         continue;
       }
       const type = aliases.get(lower);
-      if (type)
+      if (type) {
+        const tokenType = type.startsWith("TYPE_") ? "IDENT" : type;
         emit(
           type === "NOT_OR_ELSE"
             ? "keyword"
             : type === "AND" || type === "OR" || type === "NOT"
               ? "operator"
               : "keyword",
-          type === "NOT_OR_ELSE" ? "NOT" : type,
+          type === "NOT_OR_ELSE" ? "NOT" : tokenType,
           start,
+          tokenType === "IDENT" ? word : undefined,
         );
-      else emit("identifier", "IDENT", start, word);
+      } else emit("identifier", "IDENT", start, word);
       continue;
     }
     if (/\d/.test(ch) || (ch === "." && /\d/.test(source[i + 1] ?? ""))) {
@@ -186,10 +191,14 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
       continue;
     }
     const two = source.slice(i, i + 2);
-    if ([">=", "<=", "==", "!=", "&&", "||"].includes(two)) {
+    if ([">=", "<=", "==", "!=", "&&", "||", "->"].includes(two)) {
       advance();
       advance();
-      emit("operator", ({ "&&": "AND", "||": "OR" } as Record<string, string>)[two] ?? two, start);
+      emit(
+        two === "->" ? "punctuation" : "operator",
+        ({ "&&": "AND", "||": "OR", "->": "ARROW" } as Record<string, string>)[two] ?? two,
+        start,
+      );
       continue;
     }
     if ("+-*/><!".includes(ch)) {
@@ -197,7 +206,7 @@ export function lex(source: string): { tokens: Token[]; diagnostics: Diagnostic[
       emit("operator", ch === "!" ? "NOT_SYMBOL" : ch, start);
       continue;
     }
-    if ("=()".includes(ch)) {
+    if ("=():,".includes(ch)) {
       advance();
       emit("punctuation", ch === "=" ? "=" : ch, start);
       continue;

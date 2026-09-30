@@ -1,4 +1,4 @@
-import type { Expr, Program, Span, Stmt } from "./ast";
+import type { Expr, FunctionDecl, Module, Program, Span, Stmt, TypeName } from "./ast";
 import { type Diagnostic, diagnostic } from "./diagnostics";
 import type { Token } from "./lexer";
 
@@ -19,7 +19,11 @@ const join = (a: Span, b: Span): Span => ({
   endColumn: b.endColumn,
 });
 
-export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnostic[] } {
+export function parse(tokens: Token[]): {
+  module: Module;
+  program: Program;
+  diagnostics: Diagnostic[];
+} {
   let current = 0;
   const diagnostics: Diagnostic[] = [];
   const peek = () => tokens[current] ?? tokens[tokens.length - 1];
@@ -38,7 +42,47 @@ export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnos
     throw new ParseIssue(`Expected ${hint}`, peek());
   };
   const statementStart = () =>
-    at("DECLARE", "IF", "WHILE", "PRINT") || (at("IDENT") && tokens[current + 1]?.type === "=");
+    at("DECLARE", "IF", "WHILE", "PRINT", "RETURN", "FUNCTION") ||
+    (at("IDENT") && tokens[current + 1]?.type === "=");
+
+  function typeName(): Exclude<TypeName, "string" | "error"> {
+    const token = need("IDENT", "a type name (int, float, or bool)");
+    const value = String(token.value ?? token.lexeme).toLowerCase();
+    if (value === "int" || value === "float" || value === "bool") return value;
+    throw new ParseIssue(`Unknown type '${value}'`, token);
+  }
+
+  function functionDeclaration(): FunctionDecl {
+    const start = need("FUNCTION", "'kaam'/'function'");
+    const name = need("IDENT", "a function name");
+    need("(", "'('");
+    const parameters: FunctionDecl["parameters"] = [];
+    if (!at(")")) {
+      do {
+        const parameter = need("IDENT", "a parameter name");
+        need(":", "':' after a parameter name");
+        const type = typeName();
+        parameters.push({
+          name: String(parameter.value),
+          type,
+          span: join(parameter.span, previous().span),
+        });
+      } while (match(","));
+    }
+    need(")", "')'");
+    need("ARROW", "'->' before the return type");
+    const returnType = typeName();
+    need("DO", "'kar'/'do' before the function body");
+    const body = block();
+    return {
+      kind: "function",
+      name: String(name.value),
+      parameters,
+      returnType,
+      body,
+      span: join(start.span, previous().span),
+    };
+  }
 
   function statement(): Stmt {
     const start = peek();
@@ -68,6 +112,10 @@ export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnos
         : expression();
       return { kind: "print", value, span: join(start.span, value.span) };
     }
+    if (match("RETURN")) {
+      const value = expression();
+      return { kind: "return", value, span: join(start.span, value.span) };
+    }
     if (match("IF")) {
       const condition = expression();
       need("THEN", "'to'/'then'");
@@ -93,7 +141,7 @@ export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnos
       return { kind: "while", condition, body, span: join(start.span, previous().span) };
     }
     if (match("UNSUPPORTED"))
-      throw new ParseIssue(`'${start.lexeme}' is reserved but not supported in v1`, start);
+      throw new ParseIssue(`'${start.lexeme}' is reserved but not supported in v2`, start);
     throw new ParseIssue(`Unexpected token '${peek().lexeme || "end of input"}'`, peek());
   }
   function block(): Stmt[] {
@@ -139,7 +187,19 @@ export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnos
       };
     if (t.type === "TRUE" || t.type === "FALSE")
       return { kind: "boolean", value: t.type === "TRUE", span: t.span };
-    if (t.type === "IDENT") return { kind: "variable", name: String(t.value), span: t.span };
+    if (t.type === "IDENT") {
+      const name = String(t.value);
+      if (match("(")) {
+        const args: Expr[] = [];
+        if (!at(")")) {
+          do args.push(expression());
+          while (match(","));
+        }
+        const close = need(")", "')' after function arguments");
+        return { kind: "call", name, arguments: args, span: join(t.span, close.span) };
+      }
+      return { kind: "variable", name, span: t.span };
+    }
     if (t.type === "(") {
       const e = expression();
       need(")", "')'");
@@ -202,29 +262,29 @@ export function parse(tokens: Token[]): { program: Program; diagnostics: Diagnos
   }
 
   const statements: Stmt[] = [];
+  const functions: FunctionDecl[] = [];
   while (!at("EOF")) {
     const before = current;
     try {
-      statements.push(statement());
+      if (at("FUNCTION")) functions.push(functionDeclaration());
+      else statements.push(statement());
     } catch (error) {
       recover(error);
     }
     if (current === before && !at("EOF")) take();
   }
   const eof = peek().span;
-  return {
-    program: {
-      kind: "program",
-      statements,
-      span: {
-        start: 0,
-        end: eof.end,
-        line: 1,
-        column: 1,
-        endLine: eof.endLine,
-        endColumn: eof.endColumn,
-      },
+  const program: Program = {
+    kind: "program",
+    statements,
+    span: {
+      start: 0,
+      end: eof.end,
+      line: 1,
+      column: 1,
+      endLine: eof.endLine,
+      endColumn: eof.endColumn,
     },
-    diagnostics,
   };
+  return { module: { kind: "module", functions, program }, program, diagnostics };
 }

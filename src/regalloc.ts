@@ -26,9 +26,11 @@ export function allocateRegisters(code: TacInstruction[], registerCount = 4): Re
           ? [labels.get(instruction.target)].filter((n): n is number => n !== undefined)
           : instruction.op === "ifFalse"
             ? [i + 1, labels.get(instruction.target)].filter((n): n is number => n !== undefined)
-            : i + 1 < code.length
-              ? [i + 1]
-              : [];
+            : instruction.op === "return" || instruction.op === "halt"
+              ? []
+              : i + 1 < code.length
+                ? [i + 1]
+                : [];
       const out = new Set(successors.flatMap((index) => [...liveIn[index]]));
       const input = new Set(out);
       const definition = useDef[i].def;
@@ -75,6 +77,14 @@ export function allocateRegisters(code: TacInstruction[], registerCount = 4): Re
     switch (instruction.op) {
       case "label":
         return `${instruction.name}:`;
+      case "function":
+        return `${instruction.name}(${instruction.parameters.join(", ")}):`;
+      case "call":
+        return `CALL ${instruction.name}(${instruction.args.map(location).join(", ")}) -> ${location(instruction.target)}`;
+      case "return":
+        return `RET ${location(instruction.value)}`;
+      case "halt":
+        return "HALT";
       case "const":
         return `MOV ${location(instruction.target)}, ${JSON.stringify(instruction.value)}`;
       case "copy":
@@ -106,7 +116,7 @@ export function renderTac(code: TacInstruction[]): string[] {
   return formatTac(code);
 }
 function def(instruction: TacInstruction): string | undefined {
-  return ["const", "copy", "unary", "binary"].includes(instruction.op)
+  return ["const", "copy", "unary", "binary", "call"].includes(instruction.op)
     ? (instruction as { target: string }).target
     : undefined;
 }
@@ -116,6 +126,8 @@ function uses(instruction: TacInstruction): string[] {
   if (instruction.op === "binary") return [instruction.left, instruction.right];
   if (instruction.op === "print") return [instruction.value];
   if (instruction.op === "ifFalse") return [instruction.condition];
+  if (instruction.op === "call") return instruction.args;
+  if (instruction.op === "return") return [instruction.value];
   return [];
 }
 function equal(a: Set<string>, b: Set<string>): boolean {

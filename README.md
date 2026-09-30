@@ -14,9 +14,8 @@ nahi to kar
 bas
 ```
 
-> v1 is a small, complete core (declarations, expressions, `if`/`else`, `while`,
-> `print`). Functions/`return`/`break`/`continue` are reserved keywords but **not yet
-> implemented** — see [GRAMMAR.md](./GRAMMAR.md) §1 before assuming otherwise.
+> v2 adds typed functions, parameters, calls, returns, and recursion to the complete v1
+> core. `rokay`/`aagad` (`break`/`continue`) remain reserved and unimplemented.
 
 ## Features
 
@@ -39,7 +38,7 @@ bas
 - 📖 Keyword-lookup help panel showing the English equivalent of every GujLang keyword
   (a visualizer feature, not a language construct — see PROJECT_DESCRIPTION.md §3)
 
-## Keyword Cheat Sheet (v1 core)
+## Keyword Cheat Sheet
 
 | English keyword | GujLang keyword |
 |---|---|
@@ -50,6 +49,7 @@ bas
 | `print` | `bolo` |
 | `true` / `false` | `sacu` / `khotu` |
 | `and` / `or` / `not` | `ane` / `athva` / `nathi` |
+| `function` / `return` | `kaam` / `pachu aap` |
 
 Full grammar, precedence, types, scope, and error-recovery spec:
 [GRAMMAR.md](./GRAMMAR.md). Concept-to-syllabus mapping and design rationale:
