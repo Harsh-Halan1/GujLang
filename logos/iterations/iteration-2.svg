@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Outer 'G' with Precision Angled Start Terminal -->
+    <path d="M 370 148 
+             C 335 108, 280 92, 230 92 
+             C 138 92, 92 165, 92 256 
+             C 92 347, 138 420, 230 420 
+             C 325 420, 388 355, 388 260 
+             L 245 260" 
+          fill="none" 
+          stroke="#b2d77a" 
+          stroke-width="38" 
+          stroke-linecap="square" 
+          stroke-linejoin="round"/>
+
+    <!-- Interlocking 'L' with Forward-Execution Arrow on Foot -->
+    <path d="M 245 260 
+             L 245 355 
+             L 330 355" 
+          fill="none" 
+          stroke="#73bea0" 
+          stroke-width="38" 
+          stroke-linecap="square" 
+          stroke-linejoin="round"/>
+          
+    <!-- Forward Arrow / Syntax Chevron on L-foot -->
+    <polygon points="330,332 368,355 330,378" fill="#73bea0"/>
+
+    <!-- Joint Crossover Ring & Amber Indicator -->
+    <circle cx="245" cy="260" r="24" fill="#101512" stroke="#d8ad68" stroke-width="8"/>
+    <circle cx="245" cy="260" r="10" fill="#d8ad68"/>
+
+    <!-- Top 'G' Entry Point Marker -->
+    <circle cx="370" cy="148" r="8" fill="#eff5ec"/>
+  </g>
+</svg>

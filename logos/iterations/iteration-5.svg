@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Outer 'G' Loop in Sage Lime -->
+    <path d="M 365 140 
+             C 330 105, 275 92, 230 92 
+             C 140 92, 95 165, 95 256 
+             C 95 347, 140 420, 230 420 
+             C 325 420, 385 355, 385 260 
+             L 245 260" 
+          fill="none" 
+          stroke="#b2d77a" 
+          stroke-width="38" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Interlocking 'L' in Mint -->
+    <path d="M 245 260 
+             L 245 355 
+             L 345 355" 
+          fill="none" 
+          stroke="#73bea0" 
+          stroke-width="38" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Integrated Execution Prompt (Triangle pointing into L) -->
+    <polygon points="230,244 260,260 230,276" fill="#d8ad68"/>
+
+    <!-- Compiler Phase Register Markers on the 'G' Spine -->
+    <circle cx="106" cy="180" r="10" fill="#73bea0"/>
+    <circle cx="95" cy="256" r="10" fill="#eff5ec"/>
+    <circle cx="106" cy="332" r="10" fill="#d8ad68"/>
+
+    <!-- Terminal VM Execution Node on L-foot -->
+    <circle cx="345" cy="355" r="14" fill="#eff5ec"/>
+    <circle cx="345" cy="355" r="6" fill="#101512"/>
+  </g>
+</svg>

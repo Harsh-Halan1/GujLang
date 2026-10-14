@@ -11,5 +11,5 @@
     }
   },
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
-  "files": { "includes": ["**", "!dist", "!node_modules", "!web-dist"] }
+  "files": { "includes": ["**", "!dist", "!node_modules", "!web-dist", "!logos", "!.agents"] }
 }

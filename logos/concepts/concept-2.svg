@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Dual-Language Interlocking Bridge forming 'G' -->
+    <!-- Left Ribbon: Organic Gujarati Syntax Curve in Mint -->
+    <path d="M 280 115 
+             C 175 115, 115 175, 115 256 
+             C 115 337, 175 397, 265 397 
+             C 325 397, 370 365, 385 320" 
+          fill="none" 
+          stroke="#73bea0" 
+          stroke-width="36" 
+          stroke-linecap="round"/>
+
+    <!-- Right Ribbon: Code Chevron & Bridge in Sage Lime -->
+    <path d="M 230 115 
+             C 335 115, 395 175, 395 256 
+             L 260 256 
+             L 305 295" 
+          fill="none" 
+          stroke="#b2d77a" 
+          stroke-width="36" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Interlocking Crossover Node in Warm Amber -->
+    <circle cx="260" cy="256" r="18" fill="#d8ad68"/>
+    <circle cx="260" cy="256" r="8" fill="#101512"/>
+
+    <!-- Code Bridge Dots: English & Gujarati convergence points -->
+    <circle cx="170" cy="190" r="10" fill="#73bea0"/>
+    <circle cx="340" cy="190" r="10" fill="#b2d77a"/>
+  </g>
+</svg>

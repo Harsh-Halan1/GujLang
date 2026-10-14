@@ -1,4 +1,4 @@
-# GujLang 🪔
+# <img src="public/logo.svg" alt="GujLang Logo" width="38" height="38" align="center" /> GujLang
 
 A toy imperative programming language with **Gujarati-inspired keywords**, a full
 compiler pipeline, and an interactive browser-based visualizer — built for the

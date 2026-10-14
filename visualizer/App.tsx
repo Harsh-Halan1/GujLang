@@ -350,7 +350,7 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <a className="brand" href="/">
-          <span className="brand-mark">G</span>
+          <img className="brand-mark" src="/logo.svg" alt="GujLang logo" width="34" height="34" />
           <span>
             GujLang<small>Compiler learning studio</small>
           </span>

@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <!-- Seamless Compiler Flow Gradients -->
+    <linearGradient id="g-flow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#c8ee8c"/>
+      <stop offset="50%" stop-color="#b2d77a"/>
+      <stop offset="100%" stop-color="#73bea0"/>
+    </linearGradient>
+    <linearGradient id="l-flow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#73bea0"/>
+      <stop offset="100%" stop-color="#e5bd75"/>
+    </linearGradient>
+  </defs>
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Outer 'G' with Continuous Radiant Vector Flow -->
+    <path d="M 365 140 
+             C 330 105, 275 92, 230 92 
+             C 140 92, 95 165, 95 256 
+             C 95 347, 140 420, 230 420 
+             C 325 420, 385 355, 385 260 
+             L 245 260" 
+          fill="none" 
+          stroke="url(#g-flow)" 
+          stroke-width="40" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Interlocking 'L' Transitioning to Amber Execution -->
+    <path d="M 245 260 
+             L 245 355 
+             L 345 355" 
+          fill="none" 
+          stroke="url(#l-flow)" 
+          stroke-width="40" 
+          stroke-linecap="round" 
+          stroke-linejoin="round"/>
+
+    <!-- Radiant Crossover Joint Core -->
+    <circle cx="245" cy="260" r="24" fill="#101512" stroke="#d8ad68" stroke-width="8"/>
+    <circle cx="245" cy="260" r="11" fill="#f4faf0"/>
+
+    <!-- Terminal Pulse Spark on L-foot -->
+    <circle cx="345" cy="355" r="12" fill="#e5bd75"/>
+  </g>
+</svg>

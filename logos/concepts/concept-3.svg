@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Outer Pipeline Execution Loop -->
+    <circle cx="256" cy="256" r="145" fill="none" stroke="#233226" stroke-width="28"/>
+    
+    <!-- Active Pipeline Track Segments (Mint & Sage) -->
+    <path d="M 256 111 A 145 145 0 0 1 381 182" fill="none" stroke="#b2d77a" stroke-width="28" stroke-linecap="round"/>
+    <path d="M 381 330 A 145 145 0 0 1 256 401" fill="none" stroke="#73bea0" stroke-width="28" stroke-linecap="round"/>
+    <path d="M 131 330 A 145 145 0 0 1 131 182" fill="none" stroke="#b2d77a" stroke-width="28" stroke-linecap="round"/>
+
+    <!-- 6 Geometric Charkha Spokes / Compiler Stages -->
+    <!-- Spoke 1 (0°): Lexer -->
+    <path d="M 256 256 L 396 256" stroke="#b2d77a" stroke-width="12" stroke-linecap="round"/>
+    <!-- Spoke 2 (60°): Parser -->
+    <path d="M 256 256 L 326 377" stroke="#73bea0" stroke-width="12" stroke-linecap="round"/>
+    <!-- Spoke 3 (120°): Semantics -->
+    <path d="M 256 256 L 186 377" stroke="#b2d77a" stroke-width="12" stroke-linecap="round"/>
+    <!-- Spoke 4 (180°): TAC -->
+    <path d="M 256 256 L 116 256" stroke="#73bea0" stroke-width="12" stroke-linecap="round"/>
+    <!-- Spoke 5 (240°): Optimizer -->
+    <path d="M 256 256 L 186 135" stroke="#b2d77a" stroke-width="12" stroke-linecap="round"/>
+    <!-- Spoke 6 (300°): Bytecode VM -->
+    <path d="M 256 256 L 326 135" stroke="#73bea0" stroke-width="12" stroke-linecap="round"/>
+
+    <!-- Compiler Phase Terminal Nodes -->
+    <circle cx="396" cy="256" r="14" fill="#b2d77a"/>
+    <circle cx="326" cy="377" r="14" fill="#73bea0"/>
+    <circle cx="186" cy="377" r="14" fill="#b2d77a"/>
+    <circle cx="116" cy="256" r="14" fill="#73bea0"/>
+    <circle cx="186" cy="135" r="14" fill="#b2d77a"/>
+    <circle cx="326" cy="135" r="14" fill="#73bea0"/>
+
+    <!-- Central Spindle Hub / VM Engine Core (Warm Amber) -->
+    <circle cx="256" cy="256" r="44" fill="#1c251f" stroke="#d8ad68" stroke-width="10"/>
+    <circle cx="256" cy="256" r="22" fill="#d8ad68"/>
+    <circle cx="256" cy="256" r="9" fill="#101512"/>
+  </g>
+</svg>

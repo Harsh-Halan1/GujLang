@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Diya Base / Syntax Bracket Cradle -->
+    <path d="M 100 290 C 115 385, 210 405, 256 405 C 302 405, 397 385, 412 290 C 360 306, 315 306, 256 288 C 197 306, 152 306, 100 290 Z" fill="#1c2620" stroke="#73bea0" stroke-width="14" stroke-linejoin="round"/>
+    
+    <!-- Code Bracket Accents inside the base -->
+    <path d="M 175 325 L 145 345 L 175 365" fill="none" stroke="#73bea0" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M 337 325 L 367 345 L 337 365" fill="none" stroke="#73bea0" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="256" cy="345" r="9" fill="#73bea0"/>
+
+    <!-- Outer Flame (Amber Energy) -->
+    <path d="M 256 85 C 285 155, 345 205, 345 260 C 345 315, 305 340, 256 340 C 207 340, 167 315, 167 260 C 167 205, 227 155, 256 85 Z" fill="#d8ad68"/>
+
+    <!-- Mid Flame (Sage Green Pipeline) -->
+    <path d="M 256 135 C 276 185, 316 220, 316 265 C 316 302, 290 322, 256 322 C 222 322, 196 302, 196 265 C 196 220, 236 185, 256 135 Z" fill="#b2d77a"/>
+
+    <!-- Inner Core (Luminous Spark) -->
+    <path d="M 256 195 C 268 225, 286 248, 286 272 C 286 292, 272 305, 256 305 C 240 305, 226 292, 226 272 C 226 248, 244 225, 256 195 Z" fill="#eff5ed"/>
+  </g>
+</svg>

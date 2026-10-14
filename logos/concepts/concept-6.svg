@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <g id="background">
+    <rect x="16" y="16" width="480" height="480" rx="108" fill="#101512" stroke="#253228" stroke-width="6"/>
+  </g>
+  <g id="icon">
+    <!-- Authentic Gujarati 'ગ' (Ga) Modern Devtool Glyph -->
+    <!-- Left Arch & Foot of 'ગ' in Vibrant Sage Lime -->
+    <path d="M 235 390 
+             C 175 390, 120 335, 120 256 
+             C 120 170, 175 118, 255 118 
+             C 285 118, 305 130, 315 150" 
+          fill="none" 
+          stroke="#b2d77a" 
+          stroke-width="44" 
+          stroke-linecap="round"/>
+
+    <!-- Right Vertical Stem of 'ગ' in Fresh Mint -->
+    <line x1="375" y1="118" x2="375" y2="390" stroke="#73bea0" stroke-width="44" stroke-linecap="round"/>
+
+    <!-- Arch Terminal Foot Node in Sage -->
+    <circle cx="235" cy="390" r="16" fill="#101512"/>
+    <circle cx="235" cy="390" r="8" fill="#b2d77a"/>
+
+    <!-- Horizontal Connecting Syntax Beam & Amber Register Node -->
+    <line x1="255" y1="118" x2="375" y2="118" stroke="#d8ad68" stroke-width="14" stroke-linecap="round" stroke-dasharray="1 1"/>
+    <circle cx="375" cy="254" r="14" fill="#d8ad68"/>
+    <circle cx="375" cy="254" r="6" fill="#101512"/>
+  </g>
+</svg>
